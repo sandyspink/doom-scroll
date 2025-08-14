@@ -134,8 +134,26 @@ body {
     text-shadow: 0 0 10px rgba(156, 39, 176, 0.5);
 }
 
-.number-display.start {
-    color: #2196F3;
+.number-display.story-intro {
+    color: #E8E8E8;
+    font-size: 24px;
+    line-height: 1.2;
+    text-align: center;
+    padding: 10px;
+    font-family: 'Cinzel', serif;
+}
+
+.number-display.tutorial-text {
+    color: #D4AF37;
+    font-size: 20px;
+    line-height: 1.3;
+    text-align: center;
+    padding: 15px;
+    font-family: 'Cinzel', serif;
+}
+
+.number-display.shop {
+    color: #D4AF37;
     font-size: 60px;
 }
 

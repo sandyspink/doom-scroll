@@ -13,7 +13,7 @@ class NumberFeed {
         this.scoreElement = document.getElementById('score');
         this.gold = 0;
         this.goldElement = document.getElementById('gold');
-        this.goldChance = 0.3; // 30% chance positive values give gold instead of health
+        this.goldChance = 0.5; // 50% chance positive values give gold instead of health
         this.currentFloor = 1;
         this.floorElement = document.getElementById('floor');
         this.floorUpdateTimeout = null;
@@ -42,7 +42,7 @@ class NumberFeed {
     
     generateNumberForFloor(floor) {
         // Generate a single number based on the floor
-        if (Math.random() < 0.5) {
+        if (Math.random() < 0.3) { // Reduced from 0.5 to 0.3 (30% attacks)
             // Negative number (attack) - scale with floor: -1 to -(1 + floor)
             const maxDamage = 1 + floor;
             return -(Math.floor(Math.random() * maxDamage) + 1);
@@ -63,18 +63,24 @@ class NumberFeed {
             const horizontalContainer = document.createElement('div');
             horizontalContainer.className = 'horizontal-container';
             
-            // Generate 3-5 random slides for each feed item
-            const slideCount = Math.floor(Math.random() * 3) + 3; // 3-5 slides
-            const slideNumbers = [];
+            // First row is tutorial with fixed content
+            let slideNumbers = [];
             const currentFloor = index + 1; // Floor number for this row
             
-            for (let i = 0; i < slideCount; i++) {
-                if (i === slideCount - 1) {
-                    // Last slide is always gold - scale with floor
-                    const maxGold = 1 + currentFloor;
-                    slideNumbers.push(Math.floor(Math.random() * maxGold) + 1);
-                } else {
-                    slideNumbers.push(this.generateNumberForFloor(currentFloor));
+            if (index === 0) {
+                // Tutorial row with specific slides
+                slideNumbers = ['INTRO', 'TUTORIAL1', 'TUTORIAL2', 'TUTORIAL3', 'TUTORIAL4'];
+            } else {
+                // Generate 3-5 random slides for each feed item
+                const slideCount = Math.floor(Math.random() * 3) + 3; // 3-5 slides
+                
+                for (let i = 0; i < slideCount; i++) {
+                    if (i === slideCount - 1) {
+                        // Last slide is always shop
+                        slideNumbers.push('SHOP');
+                    } else {
+                        slideNumbers.push(this.generateNumberForFloor(currentFloor));
+                    }
                 }
             }
             
@@ -87,11 +93,32 @@ class NumberFeed {
                 const numberDisplay = document.createElement('div');
                 numberDisplay.className = 'number-display';
                 
-                // First slide shows "START" instead of number
-                if (slideIndex === 0) {
-                    numberDisplay.textContent = 'START';
-                    numberDisplay.classList.add('start');
-                    slide.dataset.scored = 'true'; // START slides don't add to score
+                // Handle tutorial slides
+                if (slideNumber === 'INTRO') {
+                    numberDisplay.innerHTML = 'You are a knight who must endure the endless depths to find the<br><strong>Scroll of Doom</strong><br>at the bottom of the<br><strong>Demon\'s Lair</strong>';
+                    numberDisplay.classList.add('story-intro');
+                    slide.dataset.scored = 'true'; // Story slides don't add to score
+                } else if (slideNumber === 'TUTORIAL1') {
+                    numberDisplay.innerHTML = 'Collect <strong>💰 Gold</strong> to buy things from the shop';
+                    numberDisplay.classList.add('tutorial-text');
+                    slide.dataset.scored = 'true';
+                } else if (slideNumber === 'TUTORIAL2') {
+                    numberDisplay.innerHTML = 'Upgrade your <strong>🛡️ Armor</strong> to prevent damage';
+                    numberDisplay.classList.add('tutorial-text');
+                    slide.dataset.scored = 'true';
+                } else if (slideNumber === 'TUTORIAL3') {
+                    numberDisplay.innerHTML = 'Use <strong>🧪 Heal Potions</strong> often to survive';
+                    numberDisplay.classList.add('tutorial-text');
+                    slide.dataset.scored = 'true';
+                } else if (slideNumber === 'TUTORIAL4') {
+                    numberDisplay.innerHTML = '<strong>Scroll down</strong> to start<br><strong>Swipe left/right</strong> to enter a dungeon floor';
+                    numberDisplay.classList.add('tutorial-text');
+                    slide.dataset.scored = 'true';
+                } else if (slideNumber === 'SHOP') {
+                    console.log('Creating shop slide!'); // Debug log
+                    // Create shop items instead of just text
+                    this.createShopSlide(slide, currentFloor);
+                    // Don't duplicate the dataset here - createShopSlide handles it
                 } else {
                     // Determine if positive value should give gold, max HP, or regular health
                     const isLastSlide = slideIndex === slideNumbers.length - 1;
@@ -99,17 +126,13 @@ class NumberFeed {
                     let isMaxHP = false;
                     
                     if (slideNumber > 0) {
-                        if (isLastSlide) {
-                            isGold = true; // Last slide is always gold
-                        } else {
-                            const rand = Math.random();
-                            if (rand < 0.2) { // 20% chance for max HP potion
-                                isMaxHP = true;
-                            } else if (rand < 0.2 + this.goldChance) { // 30% chance for gold after max HP
-                                isGold = true;
-                            }
-                            // Otherwise it's regular health (remaining ~50%)
+                        const rand = Math.random();
+                        if (rand < 0.2) { // 20% chance for max HP potion
+                            isMaxHP = true;
+                        } else if (rand < 0.2 + this.goldChance) { // 30% chance for gold after max HP
+                            isGold = true;
                         }
+                        // Otherwise it's regular health (remaining ~50%)
                     }
                     
                     // Add icons and prefix for numbers
@@ -157,18 +180,23 @@ class NumberFeed {
                     }
                 }
                 
-                slide.appendChild(numberDisplay);
+                if (slideNumber !== 'SHOP' && !['INTRO', 'TUTORIAL1', 'TUTORIAL2', 'TUTORIAL3', 'TUTORIAL4'].includes(slideNumber)) {
+                    slide.appendChild(numberDisplay);
+                } else if (['INTRO', 'TUTORIAL1', 'TUTORIAL2', 'TUTORIAL3', 'TUTORIAL4'].includes(slideNumber)) {
+                    // Tutorial slides already have numberDisplay created above
+                    slide.appendChild(numberDisplay);
+                }
                 horizontalContainer.appendChild(slide);
             });
             
             item.appendChild(horizontalContainer);
             
             // Create dots indicator
-            if (slideCount > 1) {
+            if (slideNumbers.length > 1) {
                 const dotsContainer = document.createElement('div');
                 dotsContainer.className = 'dots-container';
                 
-                for (let i = 0; i < slideCount; i++) {
+                for (let i = 0; i < slideNumbers.length; i++) {
                     const dot = document.createElement('div');
                     dot.className = 'dot';
                     if (i === 0) dot.classList.add('active');
@@ -213,6 +241,39 @@ class NumberFeed {
     
     setupHorizontalScrollListener(horizontalContainer, dotsContainer) {
         let lastActiveIndex = 0;
+        let isDragging = false;
+        let startX = 0;
+        let scrollLeft = 0;
+        
+        // Mouse drag support for horizontal scrolling
+        horizontalContainer.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.pageX - horizontalContainer.offsetLeft;
+            scrollLeft = horizontalContainer.scrollLeft;
+            horizontalContainer.style.cursor = 'grabbing';
+            e.preventDefault();
+        });
+        
+        horizontalContainer.addEventListener('mouseleave', () => {
+            isDragging = false;
+            horizontalContainer.style.cursor = 'grab';
+        });
+        
+        horizontalContainer.addEventListener('mouseup', () => {
+            isDragging = false;
+            horizontalContainer.style.cursor = 'grab';
+        });
+        
+        horizontalContainer.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+            const x = e.pageX - horizontalContainer.offsetLeft;
+            const walk = (x - startX) * 2; // Scroll speed
+            horizontalContainer.scrollLeft = scrollLeft - walk;
+        });
+        
+        // Set cursor style
+        horizontalContainer.style.cursor = 'grab';
         
         horizontalContainer.addEventListener('scroll', () => {
             const scrollLeft = horizontalContainer.scrollLeft;
@@ -233,26 +294,34 @@ class NumberFeed {
                     const numberDisplay = slide.querySelector('.number-display');
                     
                     // Only score if not already scored and not a START slide
-                    if (numberDisplay && slide.dataset.scored === 'false') {
-                        const originalNumber = numberDisplay.dataset.originalNumber;
-                        if (originalNumber !== undefined) {
-                            const number = parseInt(originalNumber);
-                            const isGold = slide.dataset.isGold === 'true';
-                            const isMaxHP = slide.dataset.isMaxHP === 'true';
-                            
-                            if (isGold) {
-                                this.addGold(number);
-                                this.explodeAndReplace(numberDisplay, slide);
-                            } else if (isMaxHP) {
-                                this.addMaxHP(1);
-                                this.explodeAndReplace(numberDisplay, slide);
-                            } else if (number < 0) {
-                                // Attack - roll the dice before applying damage
-                                this.rollAttack(numberDisplay, slide, number);
-                            } else {
-                                // Regular health potion
-                                this.addToScore(number);
-                                this.explodeAndReplace(numberDisplay, slide);
+                    if (slide.dataset.scored === 'false') {
+                        console.log('Checking slide with isShop:', slide.dataset.isShop, 'hasNumberDisplay:', !!numberDisplay); // Debug log
+                        const isShop = slide.dataset.isShop === 'true';
+                        
+                        if (isShop) {
+                            console.log('Opening shop! isShop:', isShop, 'scored:', slide.dataset.scored); // Debug log
+                            this.openShop(slide);
+                        } else {
+                            const originalNumber = numberDisplay.dataset.originalNumber;
+                            if (originalNumber !== undefined) {
+                                const number = parseInt(originalNumber);
+                                const isGold = slide.dataset.isGold === 'true';
+                                const isMaxHP = slide.dataset.isMaxHP === 'true';
+                                
+                                if (isGold) {
+                                    this.addGold(number);
+                                    this.explodeAndReplace(numberDisplay, slide);
+                                } else if (isMaxHP) {
+                                    this.addMaxHP(1);
+                                    this.explodeAndReplace(numberDisplay, slide);
+                                } else if (number < 0) {
+                                    // Attack - roll the dice before applying damage
+                                    this.rollAttack(numberDisplay, slide, number);
+                                } else {
+                                    // Regular health potion
+                                    this.addToScore(number);
+                                    this.explodeAndReplace(numberDisplay, slide);
+                                }
                             }
                         }
                     }
@@ -320,6 +389,267 @@ class NumberFeed {
         }, 500); // Longer animation for max HP
     }
     
+    createShopSlide(slide, floor) {
+        // Store floor for dynamic checking when player reaches this slide
+        slide.dataset.shopFloor = floor;
+        slide.dataset.scored = 'false'; // Make sure it can be detected
+        slide.dataset.isShop = 'true'; // Make sure shop detection works
+        
+        // Create initial shop display (will be replaced when opened)
+        const shopDisplay = document.createElement('div');
+        shopDisplay.className = 'number-display shop';
+        shopDisplay.textContent = '🏪 SHOP';
+        shopDisplay.style.fontSize = '60px';
+        shopDisplay.style.color = '#D4AF37';
+        shopDisplay.style.textAlign = 'center';
+        
+        slide.appendChild(shopDisplay);
+        console.log('Created shop slide with isShop:', slide.dataset.isShop, 'scored:', slide.dataset.scored); // Debug
+    }
+    
+    openShop(slide) {
+        console.log('openShop called! Floor:', slide.dataset.shopFloor, 'Gold:', this.gold); // Debug
+        const floor = parseInt(slide.dataset.shopFloor);
+        const itemCost = floor * 2;
+        
+        // Hide the shop display immediately to prevent flicker
+        const shopDisplay = slide.querySelector('.number-display');
+        if (shopDisplay) {
+            shopDisplay.style.opacity = '0';
+        }
+        
+        // Check if player can afford any item NOW (when they reach the slide)
+        if (this.gold < itemCost) {
+            // Player can't afford anything - give them gold instead
+            const goldAmount = Math.floor(Math.random() * floor) + floor;
+            slide.dataset.scored = 'true';
+            this.addGold(goldAmount);
+            this.showGoldMessage(slide, goldAmount);
+            return;
+        }
+        
+        // Create shop UI dynamically when opened
+        this.createShopUI(slide, floor, itemCost);
+    }
+    
+    createShopUI(slide, floor, itemCost) {
+        // Mark as scored to prevent re-opening
+        slide.dataset.scored = 'true';
+        
+        // Clear existing content
+        slide.innerHTML = '';
+        
+        // Create shop container
+        const shopContainer = document.createElement('div');
+        shopContainer.className = 'shop-container';
+        shopContainer.style.display = 'flex';
+        shopContainer.style.flexDirection = 'column';
+        shopContainer.style.alignItems = 'center';
+        shopContainer.style.justifyContent = 'center';
+        shopContainer.style.height = '100%';
+        shopContainer.style.padding = '20px';
+        shopContainer.style.boxSizing = 'border-box';
+        
+        // Shop title
+        const title = document.createElement('h3');
+        title.textContent = '🏪 SHOP';
+        title.style.color = '#D4AF37';
+        title.style.fontSize = '24px';
+        title.style.fontFamily = "'Cinzel', serif";
+        title.style.marginBottom = '20px';
+        title.style.textAlign = 'center';
+        shopContainer.appendChild(title);
+        
+        // Gold display - use CURRENT gold amount
+        const goldDisplay = document.createElement('div');
+        goldDisplay.textContent = `Gold: ${this.gold}`;
+        goldDisplay.style.color = '#FFD700';
+        goldDisplay.style.fontSize = '16px';
+        goldDisplay.style.marginBottom = '20px';
+        goldDisplay.style.textAlign = 'center';
+        shopContainer.appendChild(goldDisplay);
+        
+        // Shop items
+        const items = [
+            { emoji: '🧪', name: 'Full Heal', action: () => this.purchaseFullHeal(itemCost, null) },
+            { emoji: '🛡️', name: 'Armor +1', action: () => this.purchaseACUpgrade(itemCost, null) },
+            { emoji: '❤️', name: 'Max HP +1', action: () => this.purchaseMaxHPUpgrade(itemCost, null) }
+        ];
+        
+        items.forEach(item => {
+            const canAfford = this.gold >= itemCost; // Check CURRENT gold
+            
+            const itemButton = document.createElement('button');
+            itemButton.style.width = '120%'; // 20% wider
+            itemButton.style.padding = '12px'; // 20% taller
+            itemButton.style.margin = '6px 0'; // Adjust margin proportionally
+            itemButton.style.backgroundColor = canAfford ? '#4CAF50' : '#666';
+            itemButton.style.color = '#fff';
+            itemButton.style.border = 'none';
+            itemButton.style.borderRadius = '8px';
+            itemButton.style.cursor = canAfford ? 'pointer' : 'not-allowed';
+            itemButton.style.fontSize = '14px';
+            itemButton.style.fontWeight = 'bold';
+            itemButton.style.opacity = canAfford ? '1' : '0.5';
+            itemButton.disabled = !canAfford;
+            
+            // Button content
+            const buttonContent = document.createElement('div');
+            buttonContent.style.display = 'flex';
+            buttonContent.style.justifyContent = 'space-between';
+            buttonContent.style.alignItems = 'center';
+            
+            const leftSpan = document.createElement('span');
+            leftSpan.textContent = `${item.emoji} ${item.name}`;
+            
+            const rightSpan = document.createElement('span');
+            rightSpan.textContent = `${itemCost}g`;
+            rightSpan.style.color = '#FFD700';
+            
+            buttonContent.appendChild(leftSpan);
+            buttonContent.appendChild(rightSpan);
+            itemButton.appendChild(buttonContent);
+            
+            if (canAfford) {
+                itemButton.onclick = () => {
+                    item.action();
+                    // Update gold display and button states after purchase using CURRENT gold
+                    goldDisplay.textContent = `Gold: ${this.gold}`;
+                    this.updateShopButtonStates(shopContainer, itemCost);
+                };
+            }
+            
+            shopContainer.appendChild(itemButton);
+        });
+        
+        slide.appendChild(shopContainer);
+    }
+    
+    updateShopButtonStates(shopContainer, itemCost) {
+        const buttons = shopContainer.querySelectorAll('button');
+        buttons.forEach(button => {
+            const canAfford = this.gold >= itemCost; // Use CURRENT gold
+            button.style.backgroundColor = canAfford ? '#4CAF50' : '#666';
+            button.style.cursor = canAfford ? 'pointer' : 'not-allowed';
+            button.style.opacity = canAfford ? '1' : '0.5';
+            button.disabled = !canAfford;
+        });
+    }
+    
+    showGoldMessage(slide, goldAmount) {
+        // Clear existing content and show gold reward message
+        slide.innerHTML = '';
+        
+        const goldDisplay = document.createElement('div');
+        goldDisplay.className = 'number-display';
+        goldDisplay.textContent = `💰 +${goldAmount}`;
+        goldDisplay.classList.add('gold');
+        goldDisplay.style.fontSize = '80px';
+        goldDisplay.style.textAlign = 'center';
+        
+        slide.appendChild(goldDisplay);
+        
+        // Add animation
+        setTimeout(() => {
+            goldDisplay.classList.add('used');
+        }, 1000);
+    }
+    
+    createGoldSlide(slide, goldAmount) {
+        // Create a regular gold slide that looks like a normal gold reward
+        const numberDisplay = document.createElement('div');
+        numberDisplay.className = 'number-display';
+        numberDisplay.textContent = `💰 +${goldAmount}`;
+        numberDisplay.classList.add('gold');
+        numberDisplay.dataset.originalNumber = goldAmount;
+        
+        slide.dataset.isGold = 'true';
+        slide.dataset.isShop = 'false';
+        slide.dataset.scored = 'false'; // Allow it to be scored normally
+        
+        slide.appendChild(numberDisplay);
+    }
+    
+    
+    createShopButton(title, price, canAfford, onClick) {
+        const button = document.createElement('button');
+        button.style.padding = '15px 20px';
+        button.style.backgroundColor = canAfford ? '#4CAF50' : '#666';
+        button.style.color = '#fff';
+        button.style.border = 'none';
+        button.style.borderRadius = '8px';
+        button.style.cursor = canAfford ? 'pointer' : 'not-allowed';
+        button.style.fontSize = '16px';
+        button.style.fontWeight = 'bold';
+        button.style.display = 'flex';
+        button.style.justifyContent = 'space-between';
+        button.style.alignItems = 'center';
+        button.style.opacity = canAfford ? '1' : '0.5';
+        button.style.transition = 'background-color 0.2s';
+        button.disabled = !canAfford;
+        
+        // Add hover effect for afforded buttons
+        if (canAfford) {
+            button.addEventListener('mouseenter', () => {
+                button.style.backgroundColor = '#45a049';
+            });
+            button.addEventListener('mouseleave', () => {
+                button.style.backgroundColor = '#4CAF50';
+            });
+        }
+        
+        const titleSpan = document.createElement('span');
+        titleSpan.textContent = title;
+        
+        const priceSpan = document.createElement('span');
+        priceSpan.textContent = price;
+        priceSpan.style.color = '#FFD700';
+        
+        button.appendChild(titleSpan);
+        button.appendChild(priceSpan);
+        
+        if (canAfford) {
+            button.onclick = onClick;
+        }
+        
+        return button;
+    }
+    
+    purchaseFullHeal(cost, shopOverlay) {
+        if (this.gold >= cost) {
+            this.gold -= cost;
+            this.score = this.maxScore; // Full heal
+            this.scoreElement.textContent = `${this.score}/${this.maxScore}`;
+            this.goldElement.textContent = this.gold;
+            if (shopOverlay) this.closeShop(shopOverlay);
+        }
+    }
+    
+    purchaseACUpgrade(cost, shopOverlay) {
+        if (this.gold >= cost) {
+            this.gold -= cost;
+            this.armor += 1;
+            this.armorElement.textContent = this.armor;
+            this.goldElement.textContent = this.gold;
+            if (shopOverlay) this.closeShop(shopOverlay);
+        }
+    }
+    
+    purchaseMaxHPUpgrade(cost, shopOverlay) {
+        if (this.gold >= cost) {
+            this.gold -= cost;
+            this.addMaxHP(1);
+            this.goldElement.textContent = this.gold;
+            if (shopOverlay) this.closeShop(shopOverlay);
+        }
+    }
+    
+    closeShop(shopOverlay) {
+        if (shopOverlay.parentNode) {
+            shopOverlay.parentNode.removeChild(shopOverlay);
+        }
+    }
+    
     gameOver() {
         // Show game over message
         this.showGameOverMessage();
@@ -348,7 +678,7 @@ class NumberFeed {
         overlay.style.fontSize = '48px';
         overlay.style.fontWeight = 'bold';
         overlay.style.textAlign = 'center';
-        overlay.innerHTML = 'GAME OVER';
+        overlay.innerHTML = `GAME OVER<br><div style="font-size: 24px; margin-top: 20px;">You made it to floor ${this.currentFloor}</div>`;
         
         // Create red fill element
         const redFill = document.createElement('div');
@@ -404,6 +734,10 @@ class NumberFeed {
         // Reset armor
         this.armor = 10;
         this.armorElement.textContent = this.armor;
+        
+        // Reset gold
+        this.gold = 0;
+        this.goldElement.textContent = this.gold;
         
         // Reset current index and scroll to top
         this.currentIndex = 0;
@@ -641,7 +975,12 @@ class NumberFeed {
                 const firstSlide = activeItem.querySelector('.slide');
                 if (firstSlide && firstSlide.dataset.scored === 'false') {
                     const numberDisplay = firstSlide.querySelector('.number-display');
-                    if (numberDisplay && numberDisplay.dataset.originalNumber !== undefined) {
+                    const isShop = firstSlide.dataset.isShop === 'true';
+                    
+                    if (isShop) {
+                        console.log('Opening shop from vertical scroll!'); // Debug log
+                        this.openShop(firstSlide);
+                    } else if (numberDisplay && numberDisplay.dataset.originalNumber !== undefined) {
                         const number = parseInt(numberDisplay.dataset.originalNumber);
                         const isGold = firstSlide.dataset.isGold === 'true';
                         const isMaxHP = firstSlide.dataset.isMaxHP === 'true';
