@@ -20,6 +20,12 @@ class NumberFeed {
         this.armor = 10;
         this.armorElement = document.getElementById('armor');
         
+        // Curse system
+        this.curseCountdown = 0;
+        this.activeCurse = null;
+        this.curseDisplayElement = document.getElementById('curse-display');
+        this.curseCountdownElement = document.getElementById('curse-countdown');
+        
         this.init();
     }
     
@@ -30,6 +36,20 @@ class NumberFeed {
         this.setActiveItem(0);
     }
     
+    getCurses() {
+        return [
+            {
+                name: "Greed's Gambit",
+                description: "Double gold found, but attacks deal double damage",
+                duration: 3,
+                effects: {
+                    goldMultiplier: 2,
+                    damageMultiplier: 2
+                }
+            }
+        ];
+    }
+
     generateNumbers() {
         // Clear existing numbers - we'll generate per floor now
         this.numbers = [];
@@ -40,17 +60,47 @@ class NumberFeed {
         }
     }
     
-    generateNumberForFloor(floor) {
-        // Generate a single number based on the floor
-        if (Math.random() < 0.3) { // Reduced from 0.5 to 0.3 (30% attacks)
-            // Negative number (attack) - scale with floor: -1 to -(1 + floor)
+    generateSlideContent(floor) {
+        return this.generateSlideContentWithWitchLimit(floor, false);
+    }
+    
+    generateSlideContentWithWitchLimit(floor, hasWitchAlready) {
+        const rand = Math.random();
+        
+        // 5% chance for witch (floors 3+, no active curse, and no witch already on this floor)
+        if (floor >= 3 && this.curseCountdown === 0 && !hasWitchAlready && rand < 0.05) {
+            return 'WITCH';
+        }
+        
+        // 30% chance for attacks  
+        if (rand < 0.35) { // 0.05 + 0.30 = 0.35
             const maxDamage = 1 + floor;
             return -(Math.floor(Math.random() * maxDamage) + 1);
-        } else {
-            // Positive number (health/gold) - scale with floor: +1 to +(1 + floor)
-            const maxHealing = 1 + floor;
-            return Math.floor(Math.random() * maxHealing) + 1;
         }
+        
+        // 65% chance for positive rewards (health/gold/maxHP)
+        const maxHealing = 1 + floor;
+        return Math.floor(Math.random() * maxHealing) + 1;
+    }
+    
+    generateNumberOnlyContent(floor) {
+        // Version that only returns numbers, no special strings
+        const rand = Math.random();
+        
+        // 30% chance for attacks
+        if (rand < 0.30) { 
+            const maxDamage = 1 + floor;
+            return -(Math.floor(Math.random() * maxDamage) + 1);
+        }
+        
+        // 70% chance for positive rewards (health/gold/maxHP)
+        const maxHealing = 1 + floor;
+        return Math.floor(Math.random() * maxHealing) + 1;
+    }
+    
+    generateNumberForFloor(floor) {
+        // Keep this for backward compatibility, but redirect to new method
+        return this.generateSlideContent(floor);
     }
     
     createFeedItems() {
@@ -73,16 +123,34 @@ class NumberFeed {
             } else {
                 // Generate 3-5 random slides for each feed item
                 const slideCount = Math.floor(Math.random() * 3) + 3; // 3-5 slides
+                console.log(`Floor ${currentFloor}: Generating ${slideCount} slides`); // Debug
+                
+                let hasWitch = false; // Track if we already have a witch on this floor
                 
                 for (let i = 0; i < slideCount; i++) {
                     if (i === slideCount - 1) {
-                        // Last slide is always shop
-                        slideNumbers.push('SHOP');
+                        // Last slide is always shop (unless cursed to disable shops)
+                        if (this.activeCurse?.effects.disableShops) {
+                            slideNumbers.push(this.generateNumberOnlyContent(currentFloor));
+                        } else {
+                            slideNumbers.push('SHOP');
+                        }
+                    } else if (currentFloor === 3 && i === slideCount - 2 && this.curseCountdown === 0) {
+                        // Force witch as second-to-last slide on floor 3 for testing
+                        slideNumbers.push('WITCH');
+                        hasWitch = true;
                     } else {
-                        slideNumbers.push(this.generateNumberForFloor(currentFloor));
+                        const content = this.generateSlideContentWithWitchLimit(currentFloor, hasWitch);
+                        console.log(`Floor ${currentFloor}, slide ${i}: Generated content`, content); // Debug
+                        if (content === 'WITCH') {
+                            hasWitch = true;
+                        }
+                        slideNumbers.push(content);
                     }
                 }
             }
+            
+            console.log(`Floor ${currentFloor}: Final slideNumbers array:`, slideNumbers); // Debug
             
             // Create slides
             slideNumbers.forEach((slideNumber, slideIndex) => {
@@ -119,6 +187,8 @@ class NumberFeed {
                     // Create shop items instead of just text
                     this.createShopSlide(slide, currentFloor);
                     // Don't duplicate the dataset here - createShopSlide handles it
+                } else if (slideNumber === 'WITCH') {
+                    this.createWitchSlide(slide, currentFloor);
                 } else {
                     // Determine if positive value should give gold, max HP, or regular health
                     const isLastSlide = slideIndex === slideNumbers.length - 1;
@@ -180,7 +250,7 @@ class NumberFeed {
                     }
                 }
                 
-                if (slideNumber !== 'SHOP' && !['INTRO', 'TUTORIAL1', 'TUTORIAL2', 'TUTORIAL3', 'TUTORIAL4'].includes(slideNumber)) {
+                if (slideNumber !== 'SHOP' && slideNumber !== 'WITCH' && !['INTRO', 'TUTORIAL1', 'TUTORIAL2', 'TUTORIAL3', 'TUTORIAL4'].includes(slideNumber)) {
                     slide.appendChild(numberDisplay);
                 } else if (['INTRO', 'TUTORIAL1', 'TUTORIAL2', 'TUTORIAL3', 'TUTORIAL4'].includes(slideNumber)) {
                     // Tutorial slides already have numberDisplay created above
@@ -218,6 +288,7 @@ class NumberFeed {
             }
             
             this.feed.appendChild(item);
+            console.log(`Floor ${currentFloor}: Feed item created and appended, total slides: ${item.querySelectorAll('.slide').length}`); // Debug
         });
     }
     
@@ -301,6 +372,9 @@ class NumberFeed {
                         if (isShop) {
                             console.log('Opening shop! isShop:', isShop, 'scored:', slide.dataset.scored); // Debug log
                             this.openShop(slide);
+                        } else if (slide.dataset.isWitch === 'true') {
+                            console.log('Witch encounter!'); // Debug log
+                            this.startWitchEncounter(slide);
                         } else {
                             const originalNumber = numberDisplay.dataset.originalNumber;
                             if (originalNumber !== undefined) {
@@ -332,24 +406,32 @@ class NumberFeed {
     }
     
     addToScore(points) {
+        let modifiedPoints = points;
+        const oldScore = this.score;
+        
         if (points > 0) {
+            // Apply healing curse effects
+            modifiedPoints = this.applyCurseEffects(points, 'healing');
             // Healing - cap at max HP
-            this.score = Math.min(this.score + points, this.maxScore);
+            this.score = Math.min(this.score + modifiedPoints, this.maxScore);
         } else {
+            // Apply damage curse effects
+            modifiedPoints = this.applyCurseEffects(points, 'damage');
             // Damage - can go below 0
-            this.score += points;
+            this.score += modifiedPoints;
         }
         
-        this.scoreElement.textContent = `${this.score}/${this.maxScore}`;
-        
-        // Add a brief animation to show HP change
+        // Add animation styles during counting
         this.scoreElement.style.transform = 'scale(1.2)';
-        this.scoreElement.style.color = points > 0 ? '#4CAF50' : points < 0 ? '#F44336' : '#FFC107';
+        this.scoreElement.style.color = modifiedPoints > 0 ? '#4CAF50' : modifiedPoints < 0 ? '#F44336' : '#FFC107';
+        
+        // Animate the counter up/down
+        this.animateCounterUp(this.scoreElement, oldScore, this.score, 400);
         
         setTimeout(() => {
             this.scoreElement.style.transform = 'scale(1)';
             this.scoreElement.style.color = '#fff';
-        }, 200);
+        }, 500);
         
         // Check for game over
         if (this.score <= 0) {
@@ -358,17 +440,21 @@ class NumberFeed {
     }
     
     addGold(amount) {
-        this.gold += amount;
-        this.goldElement.textContent = this.gold;
+        const modifiedAmount = this.applyCurseEffects(amount, 'gold');
+        const oldGold = this.gold;
+        this.gold += modifiedAmount;
         
-        // Add a brief animation to show gold gain
+        // Add animation styles during counting
         this.goldElement.style.transform = 'scale(1.2)';
         this.goldElement.style.color = '#FFF700'; // Brighter gold for animation
+        
+        // Animate the counter up
+        this.animateCounterUp(this.goldElement, oldGold, this.gold, 400);
         
         setTimeout(() => {
             this.goldElement.style.transform = 'scale(1)';
             this.goldElement.style.color = '#FFD700'; // Back to normal gold
-        }, 200);
+        }, 500);
     }
     
     addMaxHP(amount) {
@@ -405,6 +491,390 @@ class NumberFeed {
         
         slide.appendChild(shopDisplay);
         console.log('Created shop slide with isShop:', slide.dataset.isShop, 'scored:', slide.dataset.scored); // Debug
+    }
+    
+    createWitchSlide(slide, floor) {
+        slide.dataset.scored = 'false';
+        slide.dataset.isWitch = 'true';
+        
+        // Create witch display
+        const witchDisplay = document.createElement('div');
+        witchDisplay.className = 'number-display';
+        witchDisplay.textContent = '🧙‍♀️ WITCH';
+        witchDisplay.style.fontSize = '80px';
+        witchDisplay.style.color = '#8B008B';
+        witchDisplay.style.textAlign = 'center';
+        witchDisplay.style.textShadow = '0 0 10px rgba(139, 0, 139, 0.8)';
+        
+        slide.appendChild(witchDisplay);
+    }
+    
+    startWitchEncounter(slide) {
+        slide.dataset.scored = 'true'; // Prevent re-triggering
+        
+        // Get a random curse and store it on the slide
+        const curses = this.getCurses();
+        const randomCurse = curses[Math.floor(Math.random() * curses.length)];
+        
+        // Hide the witch display immediately to prevent flicker
+        const witchDisplay = slide.querySelector('.number-display');
+        if (witchDisplay) {
+            witchDisplay.style.opacity = '0';
+        }
+        
+        // Create witch encounter UI like shop
+        this.createWitchUI(slide, randomCurse);
+    }
+    
+    createWitchUI(slide, curse) {
+        // Clear existing content
+        slide.innerHTML = '';
+        
+        // Create witch container
+        const witchContainer = document.createElement('div');
+        witchContainer.className = 'witch-container';
+        witchContainer.style.display = 'flex';
+        witchContainer.style.flexDirection = 'column';
+        witchContainer.style.alignItems = 'center';
+        witchContainer.style.justifyContent = 'center';
+        witchContainer.style.height = '100%';
+        witchContainer.style.padding = '20px';
+        witchContainer.style.boxSizing = 'border-box';
+        
+        // Witch emoji and title
+        const title = document.createElement('div');
+        title.innerHTML = '🧙‍♀️<br><strong>Witch Encounter</strong>';
+        title.style.color = '#8B008B';
+        title.style.fontSize = '24px';
+        title.style.fontFamily = "'Cinzel', serif";
+        title.style.marginBottom = '15px';
+        title.style.textAlign = 'center';
+        title.style.lineHeight = '1.3';
+        title.style.textShadow = '0 0 10px rgba(139, 0, 139, 0.8)';
+        witchContainer.appendChild(title);
+        
+        // Curse name
+        const curseName = document.createElement('div');
+        curseName.textContent = curse.name;
+        curseName.style.fontSize = '18px';
+        curseName.style.color = '#D4AF37';
+        curseName.style.fontWeight = 'bold';
+        curseName.style.marginBottom = '10px';
+        curseName.style.fontFamily = "'Cinzel', serif";
+        curseName.style.textAlign = 'center';
+        witchContainer.appendChild(curseName);
+        
+        // Brief description
+        const briefDesc = document.createElement('div');
+        briefDesc.textContent = curse.description;
+        briefDesc.style.fontSize = '14px';
+        briefDesc.style.color = '#ffffff';
+        briefDesc.style.marginBottom = '8px';
+        briefDesc.style.lineHeight = '1.3';
+        briefDesc.style.textAlign = 'center';
+        witchContainer.appendChild(briefDesc);
+        
+        // Duration
+        const duration = document.createElement('div');
+        duration.textContent = `${curse.duration} floors`;
+        duration.style.fontSize = '12px';
+        duration.style.color = '#9E9E9E';
+        duration.style.marginBottom = '15px';
+        duration.style.textAlign = 'center';
+        witchContainer.appendChild(duration);
+        
+        // Buttons container
+        const buttonsContainer = document.createElement('div');
+        buttonsContainer.style.display = 'flex';
+        buttonsContainer.style.gap = '12px';
+        buttonsContainer.style.justifyContent = 'center';
+        
+        // Accept button
+        const acceptBtn = document.createElement('button');
+        acceptBtn.textContent = 'Accept Curse';
+        acceptBtn.style.padding = '10px 16px';
+        acceptBtn.style.backgroundColor = '#8B008B';
+        acceptBtn.style.color = '#ffffff';
+        acceptBtn.style.border = 'none';
+        acceptBtn.style.borderRadius = '6px';
+        acceptBtn.style.fontSize = '12px';
+        acceptBtn.style.fontWeight = 'bold';
+        acceptBtn.style.cursor = 'pointer';
+        acceptBtn.style.transition = 'background-color 0.2s';
+        
+        acceptBtn.addEventListener('mouseenter', () => {
+            acceptBtn.style.backgroundColor = '#A020A0';
+        });
+        acceptBtn.addEventListener('mouseleave', () => {
+            acceptBtn.style.backgroundColor = '#8B008B';
+        });
+        
+        acceptBtn.onclick = () => {
+            this.acceptCurse(curse);
+            this.showCurseAcceptedMessage(slide);
+        };
+        
+        // Banish button
+        const banishBtn = document.createElement('button');
+        banishBtn.textContent = 'Banish Witch';
+        banishBtn.style.padding = '10px 16px';
+        banishBtn.style.backgroundColor = '#4CAF50';
+        banishBtn.style.color = '#ffffff';
+        banishBtn.style.border = 'none';
+        banishBtn.style.borderRadius = '6px';
+        banishBtn.style.fontSize = '12px';
+        banishBtn.style.fontWeight = 'bold';
+        banishBtn.style.cursor = 'pointer';
+        banishBtn.style.transition = 'background-color 0.2s';
+        
+        banishBtn.addEventListener('mouseenter', () => {
+            banishBtn.style.backgroundColor = '#45a049';
+        });
+        banishBtn.addEventListener('mouseleave', () => {
+            banishBtn.style.backgroundColor = '#4CAF50';
+        });
+        
+        banishBtn.onclick = () => {
+            this.showWitchBanishedMessage(slide);
+        };
+        
+        buttonsContainer.appendChild(acceptBtn);
+        buttonsContainer.appendChild(banishBtn);
+        witchContainer.appendChild(buttonsContainer);
+        slide.appendChild(witchContainer);
+    }
+    
+    showCurseAcceptedMessage(slide) {
+        // Clear existing content and show acceptance message
+        slide.innerHTML = '';
+        
+        const messageDisplay = document.createElement('div');
+        messageDisplay.className = 'number-display';
+        messageDisplay.innerHTML = '✨ Curse Accepted<br><span style="font-size: 0.6em;">The witch vanishes with a cackle</span>';
+        messageDisplay.style.fontSize = '60px';
+        messageDisplay.style.color = '#8B008B';
+        messageDisplay.style.textAlign = 'center';
+        messageDisplay.style.textShadow = '0 0 15px rgba(139, 0, 139, 0.8)';
+        
+        slide.appendChild(messageDisplay);
+        
+        // Add animation
+        setTimeout(() => {
+            messageDisplay.classList.add('used');
+        }, 1500);
+    }
+    
+    showWitchBanishedMessage(slide) {
+        // Clear existing content and show banish message
+        slide.innerHTML = '';
+        
+        const messageDisplay = document.createElement('div');
+        messageDisplay.className = 'number-display';
+        messageDisplay.innerHTML = '💨 Witch Banished<br><span style="font-size: 0.6em;">She disappears in a puff of smoke</span>';
+        messageDisplay.style.fontSize = '60px';
+        messageDisplay.style.color = '#4CAF50';
+        messageDisplay.style.textAlign = 'center';
+        messageDisplay.style.textShadow = '0 0 15px rgba(76, 175, 80, 0.6)';
+        
+        slide.appendChild(messageDisplay);
+        
+        // Add animation
+        setTimeout(() => {
+            messageDisplay.classList.add('used');
+        }, 1500);
+    }
+    
+    showWitchModal(curse) {
+        // Create modal overlay
+        const modal = document.createElement('div');
+        modal.className = 'witch-modal';
+        modal.style.position = 'fixed';
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.width = '100%';
+        modal.style.height = '100%';
+        modal.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
+        modal.style.display = 'flex';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+        modal.style.zIndex = '10000';
+        modal.style.padding = '20px';
+        modal.style.boxSizing = 'border-box';
+        
+        // Create modal content
+        const content = document.createElement('div');
+        content.style.backgroundColor = '#1a1a1a';
+        content.style.border = '2px solid #8B008B';
+        content.style.borderRadius = '15px';
+        content.style.padding = '30px';
+        content.style.maxWidth = '350px';
+        content.style.width = '100%';
+        content.style.textAlign = 'center';
+        content.style.boxShadow = '0 0 20px rgba(139, 0, 139, 0.6)';
+        
+        // Witch emoji and title
+        const title = document.createElement('div');
+        title.innerHTML = '🧙‍♀️<br><strong>A witch steps forward and offers you a curse</strong>';
+        title.style.fontSize = '24px';
+        title.style.color = '#8B008B';
+        title.style.marginBottom = '20px';
+        title.style.fontFamily = "'Cinzel', serif";
+        title.style.lineHeight = '1.3';
+        
+        // Curse name
+        const curseName = document.createElement('div');
+        curseName.textContent = curse.name;
+        curseName.style.fontSize = '20px';
+        curseName.style.color = '#D4AF37';
+        curseName.style.fontWeight = 'bold';
+        curseName.style.marginBottom = '15px';
+        curseName.style.fontFamily = "'Cinzel', serif";
+        
+        // Curse description
+        const description = document.createElement('div');
+        description.textContent = curse.description;
+        description.style.fontSize = '16px';
+        description.style.color = '#ffffff';
+        description.style.marginBottom = '10px';
+        description.style.lineHeight = '1.4';
+        
+        // Duration
+        const duration = document.createElement('div');
+        duration.textContent = `Duration: ${curse.duration} floors`;
+        duration.style.fontSize = '14px';
+        duration.style.color = '#9E9E9E';
+        duration.style.marginBottom = '25px';
+        
+        // Buttons container
+        const buttonsContainer = document.createElement('div');
+        buttonsContainer.style.display = 'flex';
+        buttonsContainer.style.gap = '15px';
+        buttonsContainer.style.justifyContent = 'center';
+        
+        // Accept button
+        const acceptBtn = document.createElement('button');
+        acceptBtn.textContent = 'Accept the Curse';
+        acceptBtn.style.padding = '12px 20px';
+        acceptBtn.style.backgroundColor = '#8B008B';
+        acceptBtn.style.color = '#ffffff';
+        acceptBtn.style.border = 'none';
+        acceptBtn.style.borderRadius = '8px';
+        acceptBtn.style.fontSize = '14px';
+        acceptBtn.style.fontWeight = 'bold';
+        acceptBtn.style.cursor = 'pointer';
+        acceptBtn.style.transition = 'background-color 0.2s';
+        
+        acceptBtn.addEventListener('mouseenter', () => {
+            acceptBtn.style.backgroundColor = '#A020A0';
+        });
+        acceptBtn.addEventListener('mouseleave', () => {
+            acceptBtn.style.backgroundColor = '#8B008B';
+        });
+        
+        acceptBtn.onclick = () => {
+            this.acceptCurse(curse);
+            document.body.removeChild(modal);
+        };
+        
+        // Banish button
+        const banishBtn = document.createElement('button');
+        banishBtn.textContent = 'Banish the Witch';
+        banishBtn.style.padding = '12px 20px';
+        banishBtn.style.backgroundColor = '#4CAF50';
+        banishBtn.style.color = '#ffffff';
+        banishBtn.style.border = 'none';
+        banishBtn.style.borderRadius = '8px';
+        banishBtn.style.fontSize = '14px';
+        banishBtn.style.fontWeight = 'bold';
+        banishBtn.style.cursor = 'pointer';
+        banishBtn.style.transition = 'background-color 0.2s';
+        
+        banishBtn.addEventListener('mouseenter', () => {
+            banishBtn.style.backgroundColor = '#45a049';
+        });
+        banishBtn.addEventListener('mouseleave', () => {
+            banishBtn.style.backgroundColor = '#4CAF50';
+        });
+        
+        banishBtn.onclick = () => {
+            document.body.removeChild(modal);
+        };
+        
+        // Assemble modal
+        buttonsContainer.appendChild(acceptBtn);
+        buttonsContainer.appendChild(banishBtn);
+        
+        content.appendChild(title);
+        content.appendChild(curseName);
+        content.appendChild(description);
+        content.appendChild(duration);
+        content.appendChild(buttonsContainer);
+        
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+    }
+    
+    acceptCurse(curse) {
+        this.activeCurse = curse;
+        this.curseCountdown = curse.duration;
+        this.updateCurseDisplay();
+        
+        // Apply immediate effects (like halving armor)
+        if (curse.effects.armorDivider) {
+            this.armor = Math.floor(this.armor / curse.effects.armorDivider);
+            this.armorElement.textContent = this.armor;
+        }
+    }
+    
+    updateCurseDisplay() {
+        if (this.curseCountdown > 0) {
+            this.curseDisplayElement.style.display = 'inline';
+            this.curseCountdownElement.textContent = this.curseCountdown;
+        } else {
+            this.curseDisplayElement.style.display = 'none';
+            this.activeCurse = null;
+        }
+    }
+    
+    applyCurseEffects(baseValue, effectType) {
+        if (!this.activeCurse) return baseValue;
+        
+        const effects = this.activeCurse.effects;
+        
+        switch (effectType) {
+            case 'gold':
+                return effects.goldMultiplier ? baseValue * effects.goldMultiplier : baseValue;
+            case 'damage':
+                return effects.damageMultiplier ? baseValue * effects.damageMultiplier : baseValue;
+            case 'healing':
+                return effects.healingMultiplier ? baseValue * effects.healingMultiplier : baseValue;
+            default:
+                return baseValue;
+        }
+    }
+    
+    animateCounterUp(element, startValue, endValue, duration = 300) {
+        const increment = endValue > startValue ? 1 : -1;
+        const totalSteps = Math.abs(endValue - startValue);
+        const stepDuration = duration / totalSteps;
+        
+        let currentValue = startValue;
+        
+        const timer = setInterval(() => {
+            currentValue += increment;
+            
+            // Update display based on element type
+            if (element === this.goldElement) {
+                element.textContent = currentValue;
+            } else if (element === this.scoreElement) {
+                element.textContent = `${currentValue}/${this.maxScore}`;
+            }
+            
+            // Stop when we reach the target
+            if (currentValue === endValue) {
+                clearInterval(timer);
+            }
+        }, stepDuration);
     }
     
     openShop(slide) {
@@ -739,6 +1209,11 @@ class NumberFeed {
         this.gold = 0;
         this.goldElement.textContent = this.gold;
         
+        // Reset curse system
+        this.curseCountdown = 0;
+        this.activeCurse = null;
+        this.updateCurseDisplay();
+        
         // Reset current index and scroll to top
         this.currentIndex = 0;
         this.scrollToItem(0);
@@ -966,8 +1441,21 @@ class NumberFeed {
             }
             
             this.floorUpdateTimeout = setTimeout(() => {
+                const oldFloor = this.currentFloor;
                 this.currentFloor = index + 1;
                 this.floorElement.textContent = this.currentFloor;
+                
+                // Decrement curse countdown when moving to a new floor
+                if (this.currentFloor > oldFloor && this.curseCountdown > 0) {
+                    this.curseCountdown--;
+                    this.updateCurseDisplay();
+                    
+                    // If curse expired, restore armor if it was modified
+                    if (this.curseCountdown === 0 && this.activeCurse?.effects.armorDivider) {
+                        this.armor *= this.activeCurse.effects.armorDivider;
+                        this.armorElement.textContent = this.armor;
+                    }
+                }
             }, 200); // Wait 200ms before updating floor to let scroll settle
             
             // Add score for the first visible slide in the new frame (if it's not START and not initial load)
@@ -980,6 +1468,9 @@ class NumberFeed {
                     if (isShop) {
                         console.log('Opening shop from vertical scroll!'); // Debug log
                         this.openShop(firstSlide);
+                    } else if (firstSlide.dataset.isWitch === 'true') {
+                        console.log('Witch encounter from vertical scroll!'); // Debug log
+                        this.startWitchEncounter(firstSlide);
                     } else if (numberDisplay && numberDisplay.dataset.originalNumber !== undefined) {
                         const number = parseInt(numberDisplay.dataset.originalNumber);
                         const isGold = firstSlide.dataset.isGold === 'true';
