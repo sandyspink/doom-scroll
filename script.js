@@ -76,13 +76,18 @@ class NumberFeed {
             return 'WITCH';
         }
         
+        // 20% chance for stairs (allowing descent)
+        if (rand < 0.25) { // 0.05 + 0.20 = 0.25
+            return 'STAIRS';
+        }
+        
         // 30% chance for attacks  
-        if (rand < 0.35) { // 0.05 + 0.30 = 0.35
+        if (rand < 0.55) { // 0.25 + 0.30 = 0.55
             const maxDamage = 1 + floor;
             return -(Math.floor(Math.random() * maxDamage) + 1);
         }
         
-        // 65% chance for positive rewards (health/gold/maxHP)
+        // 45% chance for positive rewards (health/gold/maxHP)
         const maxHealing = 1 + floor;
         return Math.floor(Math.random() * maxHealing) + 1;
     }
@@ -125,18 +130,21 @@ class NumberFeed {
                 // Tutorial row with specific slides
                 slideNumbers = ['INTRO', 'TUTORIAL1', 'TUTORIAL2', 'TUTORIAL3', 'TUTORIAL4'];
             } else {
-                // Generate 3-5 random slides for each feed item
-                const slideCount = Math.floor(Math.random() * 3) + 3; // 3-5 slides
+                // Generate 4-9 random slides for each feed item
+                const slideCount = Math.floor(Math.random() * 6) + 4; // 4-9 slides
                 console.log(`Floor ${currentFloor}: Generating ${slideCount} slides`); // Debug
                 
                 // Pre-determine all slide types
                 slideNumbers = [];
                 let hasWitch = false;
                 
-                // Generate content for non-shop slides first
-                for (let i = 0; i < slideCount - 1; i++) {
-                    if (currentFloor === 3 && i === slideCount - 2 && this.curseCountdown === 0) {
-                        // Force witch as second-to-last slide on floor 3 for testing
+                // First slide is always the floor indicator
+                slideNumbers.push('FLOOR_INDICATOR');
+                
+                // Generate content for middle slides (excluding boss and final)
+                for (let i = 1; i < slideCount - 2; i++) {
+                    if (currentFloor === 3 && i === slideCount - 3 && this.curseCountdown === 0) {
+                        // Force witch as third-to-last slide on floor 3 for testing
                         slideNumbers.push('WITCH');
                         hasWitch = true;
                     } else {
@@ -148,6 +156,9 @@ class NumberFeed {
                         slideNumbers.push(content);
                     }
                 }
+                
+                // Always add boss as second-to-last slide
+                slideNumbers.push('BOSS');
                 
                 // Always add shop as last slide (unless cursed to disable shops)
                 if (this.activeCurse?.effects.disableShops) {
@@ -205,6 +216,16 @@ class NumberFeed {
                 } else if (slideNumber === 'WITCH') {
                     this.createSlideLabel(slide, 'Witch Encounter');
                     this.createWitchSlide(slide, currentFloor);
+                } else if (slideNumber === 'FLOOR_INDICATOR') {
+                    this.createSlideLabel(slide, 'Floor Entrance');
+                    this.createFloorIndicatorSlide(slide, currentFloor);
+                } else if (slideNumber === 'STAIRS') {
+                    this.createSlideLabel(slide, 'Stairs Down');
+                    this.createStairsSlide(slide);
+                    slide.dataset.canDescend = 'true';
+                } else if (slideNumber === 'BOSS') {
+                    this.createSlideLabel(slide, 'Boss Fight!');
+                    this.createBossSlide(slide, currentFloor);
                 } else {
                     // Determine if positive value should give gold, max HP, or regular health
                     const isLastSlide = slideIndex === slideNumbers.length - 1;
@@ -231,38 +252,48 @@ class NumberFeed {
                             this.createSlideLabel(slide, 'You found a health potion!');
                         }
                     } else if (slideNumber < 0) {
-                        this.createSlideLabel(slide, 'Enemy attacked!');
+                        this.createSlideLabel(slide, 'An enemy attacks!');
                     } else {
                         this.createSlideLabel(slide, 'Nothing');
                     }
                     
-                    // Add icons and prefix for numbers
-                    let displayText;
+                    // Create vertical layout with emoji above text/number
+                    let emoji, text;
                     if (slideNumber > 0) {
                         if (isGold) {
-                            displayText = `💰 +${slideNumber}`; // Gold coin for gold reward
+                            emoji = '💰';
+                            text = `+${slideNumber}`;
                             slide.dataset.isGold = 'true';
                             slide.dataset.isMaxHP = 'false';
                         } else if (isMaxHP) {
-                            displayText = `⬆️ +1`; // Up arrow for max HP increase (always +1)
+                            emoji = '⬆️';
+                            text = '+1';
                             slide.dataset.isGold = 'false';
                             slide.dataset.isMaxHP = 'true';
                         } else {
-                            displayText = `🧪 +${slideNumber}`; // Magic potion for health
+                            emoji = '🧪';
+                            text = `+${slideNumber}`;
                             slide.dataset.isGold = 'false';
                             slide.dataset.isMaxHP = 'false';
                         }
                     } else if (slideNumber < 0) {
-                        displayText = `🗡️ ${slideNumber}`; // Sword for negative
+                        emoji = '🗡️';
+                        text = `${slideNumber}`;
                         slide.dataset.isGold = 'false';
                         slide.dataset.isMaxHP = 'false';
                     } else {
-                        displayText = slideNumber; // Zero stays plain
+                        emoji = '';
+                        text = slideNumber;
                         slide.dataset.isGold = 'false';
                         slide.dataset.isMaxHP = 'false';
                     }
                     
-                    numberDisplay.textContent = displayText;
+                    // Create vertical layout
+                    if (emoji) {
+                        numberDisplay.innerHTML = `<div style="font-size: 60px; margin-bottom: 10px;">${emoji}</div><div>${text}</div>`;
+                    } else {
+                        numberDisplay.textContent = text;
+                    }
                     numberDisplay.dataset.originalNumber = slideNumber;
                     
                     // Add color class based on number value and type
@@ -281,7 +312,7 @@ class NumberFeed {
                     }
                 }
                 
-                if (slideNumber !== 'SHOP' && slideNumber !== 'WITCH' && !['INTRO', 'TUTORIAL1', 'TUTORIAL2', 'TUTORIAL3', 'TUTORIAL4'].includes(slideNumber)) {
+                if (slideNumber !== 'SHOP' && slideNumber !== 'WITCH' && slideNumber !== 'FLOOR_INDICATOR' && slideNumber !== 'STAIRS' && slideNumber !== 'BOSS' && !['INTRO', 'TUTORIAL1', 'TUTORIAL2', 'TUTORIAL3', 'TUTORIAL4'].includes(slideNumber)) {
                     slide.appendChild(numberDisplay);
                 } else if (['INTRO', 'TUTORIAL1', 'TUTORIAL2', 'TUTORIAL3', 'TUTORIAL4'].includes(slideNumber)) {
                     // Tutorial slides already have numberDisplay created above
@@ -406,6 +437,11 @@ class NumberFeed {
                         } else if (slide.dataset.isWitch === 'true') {
                             console.log('Witch encounter!'); // Debug log
                             this.startWitchEncounter(slide);
+                        } else if (slide.dataset.isBoss === 'true') {
+                            console.log('Boss fight!'); // Debug log
+                            const numberDisplay = slide.querySelector('.number-display');
+                            const bossDamage = parseInt(numberDisplay.dataset.originalNumber);
+                            this.rollBossAttack(numberDisplay, slide, bossDamage);
                         } else {
                             const originalNumber = numberDisplay.dataset.originalNumber;
                             if (originalNumber !== undefined) {
@@ -538,6 +574,59 @@ class NumberFeed {
         witchDisplay.style.textShadow = '0 0 10px rgba(139, 0, 139, 0.8)';
         
         slide.appendChild(witchDisplay);
+    }
+    
+    createFloorIndicatorSlide(slide, floor) {
+        slide.dataset.scored = 'true'; // Floor indicators don't affect gameplay
+        
+        // Create floor indicator display
+        const floorDisplay = document.createElement('div');
+        floorDisplay.className = 'number-display text-h1';
+        floorDisplay.textContent = `Floor ${floor}`;
+        floorDisplay.style.color = '#D4AF37';
+        floorDisplay.style.textAlign = 'center';
+        floorDisplay.style.textShadow = '2px 2px 4px rgba(0, 0, 0, 0.8)';
+        
+        slide.appendChild(floorDisplay);
+    }
+    
+    createStairsSlide(slide) {
+        slide.dataset.scored = 'true'; // Stairs don't affect gameplay, just allow descent
+        
+        // Create stairs display with vertical layout and instructions
+        const stairsDisplay = document.createElement('div');
+        stairsDisplay.className = 'number-display text-h1';
+        stairsDisplay.innerHTML = `
+            <div style="font-size: 60px; margin-bottom: 10px;">🪜</div>
+            <div style="margin-bottom: 15px;">Stairs</div>
+            <div style="font-size: 14px; color: #9E9E9E; line-height: 1.3;">
+                Swipe down to descend<br>or swipe right to keep going
+            </div>
+        `;
+        stairsDisplay.style.color = '#8B4513';
+        stairsDisplay.style.textAlign = 'center';
+        stairsDisplay.style.textShadow = '2px 2px 4px rgba(0, 0, 0, 0.8)';
+        
+        slide.appendChild(stairsDisplay);
+    }
+    
+    createBossSlide(slide, floor) {
+        slide.dataset.scored = 'false';
+        slide.dataset.isBoss = 'true';
+        
+        // Calculate boss damage based on floor (stronger bosses on deeper floors)
+        const bossDamage = -(2 + floor); // Bosses hit harder than regular enemies
+        
+        // Create boss display with vertical layout
+        const bossDisplay = document.createElement('div');
+        bossDisplay.className = 'number-display text-number-large';
+        bossDisplay.innerHTML = `<div style="font-size: 80px; margin-bottom: 15px;">🐉</div><div>${bossDamage}</div>`;
+        bossDisplay.style.color = '#DC143C';
+        bossDisplay.style.textAlign = 'center';
+        bossDisplay.style.textShadow = '0 0 15px rgba(220, 20, 60, 0.8)';
+        bossDisplay.dataset.originalNumber = bossDamage;
+        
+        slide.appendChild(bossDisplay);
     }
     
     startWitchEncounter(slide) {
@@ -979,11 +1068,12 @@ class NumberFeed {
         
         // Check if player can afford any item NOW (when they reach the slide)
         if (this.gold < itemCost) {
-            // Player can't afford anything - give them gold instead
-            const goldAmount = Math.floor(Math.random() * floor) + floor;
+            // Player can't afford anything - give them double gold instead (boss loot!)
+            const baseGoldAmount = Math.floor(Math.random() * floor) + floor;
+            const goldAmount = baseGoldAmount * 2; // Double gold for boss loot
             slide.dataset.scored = 'true';
             this.addGold(goldAmount);
-            this.showGoldMessage(slide, goldAmount);
+            this.showBossLootMessage(slide, goldAmount);
             return;
         }
         
@@ -1099,10 +1189,9 @@ class NumberFeed {
         slide.innerHTML = '';
         
         const goldDisplay = document.createElement('div');
-        goldDisplay.className = 'number-display';
-        goldDisplay.textContent = `💰 +${goldAmount}`;
-        goldDisplay.classList.add('gold');
         goldDisplay.className = 'number-display text-number-medium';
+        goldDisplay.innerHTML = `<div style="font-size: 60px; margin-bottom: 10px;">💰</div><div>+${goldAmount}</div>`;
+        goldDisplay.classList.add('gold');
         goldDisplay.style.textAlign = 'center';
         
         slide.appendChild(goldDisplay);
@@ -1111,6 +1200,26 @@ class NumberFeed {
         setTimeout(() => {
             goldDisplay.classList.add('used');
         }, 1000);
+    }
+    
+    showBossLootMessage(slide, goldAmount) {
+        // Clear existing content and show boss loot reward message
+        slide.innerHTML = '';
+        
+        const lootDisplay = document.createElement('div');
+        lootDisplay.className = 'number-display text-number-medium';
+        lootDisplay.innerHTML = `<div style="font-size: 60px; margin-bottom: 10px;">💎</div><div>+${goldAmount}</div>`;
+        lootDisplay.classList.add('gold');
+        lootDisplay.style.textAlign = 'center';
+        lootDisplay.style.textShadow = '0 0 15px rgba(255, 215, 0, 0.8)';
+        lootDisplay.style.animation = 'pulse 1s ease-in-out infinite';
+        
+        slide.appendChild(lootDisplay);
+        
+        // Add animation
+        setTimeout(() => {
+            lootDisplay.classList.add('used');
+        }, 1500); // Longer display time for boss loot
     }
     
     createGoldSlide(slide, goldAmount) {
@@ -1359,9 +1468,10 @@ class NumberFeed {
         diceSpan.style.display = 'inline-block';
         diceSpan.style.animation = 'spin 0.2s linear infinite';
         
-        // Start with the dice immediately
-        numberDisplay.innerHTML = `${sword} `;
-        numberDisplay.appendChild(diceSpan);
+        // Start with the dice immediately (vertical layout)
+        numberDisplay.innerHTML = `<div style="font-size: 60px; margin-bottom: 10px;">${sword}</div><div></div>`;
+        const textDiv = numberDisplay.querySelector('div:last-child');
+        textDiv.appendChild(diceSpan);
         
         const rollTimer = setInterval(() => {
             rollCount++;
@@ -1370,12 +1480,12 @@ class NumberFeed {
                 clearInterval(rollTimer);
                 
                 if (isHit) {
-                    // Hit - show original damage
-                    numberDisplay.textContent = originalText;
+                    // Hit - show original damage (vertical layout)
+                    numberDisplay.innerHTML = `<div style="font-size: 60px; margin-bottom: 10px;">${sword}</div><div>${finalDamage}</div>`;
                     this.addToScore(finalDamage);
                 } else {
-                    // Miss - show MISS instead
-                    numberDisplay.textContent = `${sword} MISS`;
+                    // Miss - show MISS instead (vertical layout)
+                    numberDisplay.innerHTML = `<div style="font-size: 60px; margin-bottom: 10px;">${sword}</div><div>MISS</div>`;
                     numberDisplay.classList.add('miss');
                     // No damage applied
                 }
@@ -1384,6 +1494,61 @@ class NumberFeed {
                 setTimeout(() => {
                     numberDisplay.classList.add('used');
                 }, 1000);
+            }
+        }, rollInterval);
+    }
+    
+    rollBossAttack(numberDisplay, slide, finalDamage) {
+        // Mark as scored to prevent re-scoring
+        slide.dataset.scored = 'true';
+        
+        // Extract dragon and number from original text (e.g., "🐉 -7")
+        const originalText = numberDisplay.textContent;
+        const dragon = '🐉';
+        
+        // Roll d20 for boss attack with floor bonus (+1 every 5 floors) PLUS +2 boss bonus
+        const floorBonus = Math.floor(this.currentFloor / 5);
+        const bossBonus = 2; // Bosses get +2 to hit
+        const attackRoll = Math.floor(Math.random() * 20) + 1 + floorBonus + bossBonus;
+        const isHit = attackRoll > this.armor;
+        
+        // Start rolling animation - keep dragon, replace number with dice
+        let rollCount = 0;
+        const maxRolls = 8; // Boss rolls longer (8 times for dramatic effect)
+        const rollInterval = 120; // Slightly slower rolls for bosses (more dramatic)
+        
+        // Create a span for the dice with rotation animation
+        const diceSpan = document.createElement('span');
+        diceSpan.textContent = '🎲';
+        diceSpan.style.display = 'inline-block';
+        diceSpan.style.animation = 'spin 0.2s linear infinite';
+        
+        // Start with the dice immediately (vertical layout)
+        numberDisplay.innerHTML = `<div style="font-size: 80px; margin-bottom: 15px;">${dragon}</div><div></div>`;
+        const textDiv = numberDisplay.querySelector('div:last-child');
+        textDiv.appendChild(diceSpan);
+        
+        const rollTimer = setInterval(() => {
+            rollCount++;
+            
+            if (rollCount >= maxRolls) {
+                clearInterval(rollTimer);
+                
+                if (isHit) {
+                    // Hit - show original damage (vertical layout)
+                    numberDisplay.innerHTML = `<div style="font-size: 80px; margin-bottom: 15px;">${dragon}</div><div>${finalDamage}</div>`;
+                    this.addToScore(finalDamage);
+                } else {
+                    // Miss - show MISS instead (vertical layout)
+                    numberDisplay.innerHTML = `<div style="font-size: 80px; margin-bottom: 15px;">${dragon}</div><div>MISS</div>`;
+                    numberDisplay.classList.add('miss');
+                    // No damage applied
+                }
+                
+                // Wait 1.5 seconds before changing to grey "used up" appearance (longer for bosses)
+                setTimeout(() => {
+                    numberDisplay.classList.add('used');
+                }, 1500);
             }
         }, rollInterval);
     }
@@ -1451,10 +1616,12 @@ class NumberFeed {
         // Vertical swipe - navigate between feed items
         if (Math.abs(verticalDistance) > swipeThreshold) {
             if (verticalDistance > 0) {
-                // Swiped up - go to next item
-                this.nextItem();
+                // Swiped up - go to next item (descent)
+                if (this.canDescend()) {
+                    this.nextItem();
+                }
             } else {
-                // Swiped down - go to previous item
+                // Swiped down - go to previous item (always allowed)
                 this.previousItem();
             }
         }
@@ -1470,7 +1637,9 @@ class NumberFeed {
             case 'ArrowDown':
             case 'j':
                 e.preventDefault();
-                this.nextItem();
+                if (this.canDescend()) {
+                    this.nextItem();
+                }
                 break;
         }
     }
@@ -1497,6 +1666,31 @@ class NumberFeed {
         if (newIndex !== this.currentIndex && newIndex >= 0 && newIndex < this.numbers.length) {
             this.setActiveItem(newIndex);
         }
+    }
+    
+    canDescend() {
+        // Get the current feed item
+        const currentItem = document.querySelector(`[data-index="${this.currentIndex}"]`);
+        if (!currentItem) return false;
+        
+        // Get the current horizontal scroll position to determine which slide is active
+        const horizontalContainer = currentItem.querySelector('.horizontal-container');
+        if (!horizontalContainer) return false;
+        
+        const scrollLeft = horizontalContainer.scrollLeft;
+        const containerWidth = horizontalContainer.clientWidth;
+        const activeSlideIndex = Math.round(scrollLeft / containerWidth);
+        
+        const slides = horizontalContainer.querySelectorAll('.slide');
+        const currentSlide = slides[activeSlideIndex];
+        
+        if (!currentSlide) return false;
+        
+        // Allow descent if it's the last slide (shop) or a stairs slide
+        const isLastSlide = activeSlideIndex === slides.length - 1;
+        const isStairsSlide = currentSlide.dataset.canDescend === 'true';
+        
+        return isLastSlide || isStairsSlide;
     }
     
     nextItem() {
@@ -1573,6 +1767,11 @@ class NumberFeed {
                     } else if (firstSlide.dataset.isWitch === 'true') {
                         console.log('Witch encounter from vertical scroll!'); // Debug log
                         this.startWitchEncounter(firstSlide);
+                    } else if (firstSlide.dataset.isBoss === 'true') {
+                        console.log('Boss fight from vertical scroll!'); // Debug log
+                        const bossDisplay = firstSlide.querySelector('.number-display');
+                        const bossDamage = parseInt(bossDisplay.dataset.originalNumber);
+                        this.rollBossAttack(bossDisplay, firstSlide, bossDamage);
                     } else if (numberDisplay && numberDisplay.dataset.originalNumber !== undefined) {
                         const number = parseInt(numberDisplay.dataset.originalNumber);
                         const isGold = firstSlide.dataset.isGold === 'true';
