@@ -13,7 +13,7 @@ class NumberFeed {
         this.scoreElement = document.getElementById('score');
         this.gold = 0;
         this.goldElement = document.getElementById('gold');
-        this.goldChance = 0.5; // 50% chance positive values give gold instead of health
+        this.goldChance = 0.6; // 60% chance positive values give gold instead of health
         this.currentFloor = 0; // Start at floor 0 for tutorial
         this.shopAvailable = false; // Track if shop should be available on boss floors
         this.floorElement = document.getElementById('floor');
@@ -82,18 +82,18 @@ class NumberFeed {
             return 'WITCH';
         }
         
-        // 20% chance for stairs (allowing descent)
-        if (rand < 0.25) { // 0.05 + 0.20 = 0.25
+        // 15% chance for stairs (allowing descent)
+        if (rand < 0.20) { // 0.05 + 0.15 = 0.20
             return 'STAIRS';
         }
         
-        // 30% chance for attacks  
-        if (rand < 0.55) { // 0.25 + 0.30 = 0.55
+        // 25% chance for attacks  
+        if (rand < 0.45) { // 0.20 + 0.25 = 0.45
             const maxDamage = 1 + floor;
             return -(Math.floor(Math.random() * maxDamage) + 1);
         }
         
-        // 45% chance for positive rewards (health/gold/maxHP)
+        // 50% chance for positive rewards (health/gold/maxHP)
         const maxHealing = 1 + floor;
         return Math.floor(Math.random() * maxHealing) + 1;
     }
@@ -255,9 +255,9 @@ class NumberFeed {
                     
                     if (slideNumber > 0) {
                         const rand = Math.random();
-                        if (rand < 0.2) { // 20% chance for max HP potion
+                        if (rand < 0.08) { // 8% chance for max HP potion  
                             isMaxHP = true;
-                        } else if (rand < 0.2 + this.goldChance) { // 30% chance for gold after max HP
+                        } else if (rand < 0.08 + this.goldChance) { // 60% chance for gold after max HP
                             isGold = true;
                         }
                         // Otherwise it's regular health (remaining ~50%)
@@ -1126,23 +1126,23 @@ class NumberFeed {
         shopContainer.style.padding = '20px';
         shopContainer.style.boxSizing = 'border-box';
         
+        // Shop emoji (above title)
+        const shopEmoji = document.createElement('div');
+        shopEmoji.textContent = '🛒';
+        shopEmoji.className = 'text-number-large';
+        shopEmoji.style.color = '#D4AF37';
+        shopEmoji.style.textAlign = 'center';
+        shopEmoji.style.marginBottom = '10px';
+        shopContainer.appendChild(shopEmoji);
+        
         // Shop title
         const title = document.createElement('h3');
-        title.textContent = '🛒 SHOP';
+        title.textContent = 'SHOP';
         title.style.color = '#D4AF37';
         title.className = 'text-number-large';
         title.style.marginBottom = '20px';
         title.style.textAlign = 'center';
         shopContainer.appendChild(title);
-        
-        // Gold display - use CURRENT gold amount
-        const goldDisplay = document.createElement('div');
-        goldDisplay.textContent = `Gold: ${this.gold}`;
-        goldDisplay.style.color = '#FFD700';
-        goldDisplay.className = 'text-body';
-        goldDisplay.style.marginBottom = '20px';
-        goldDisplay.style.textAlign = 'center';
-        shopContainer.appendChild(goldDisplay);
         
         // Shop items
         const items = [
