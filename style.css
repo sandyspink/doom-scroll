@@ -77,7 +77,7 @@ body {
 
 .button {
     width: 100%;
-    height: 64px;
+    height: 40px;
     padding: 0;
     border: none;
     border-radius: 8px;
@@ -323,6 +323,132 @@ body {
 
 .gold-display #gold {
     color: #F2A71B;
+}
+
+/* Floor display styling */
+.floor-display {
+    color: #BFB78F;
+    text-align: center;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* Stairs display styling */
+.stairs-display {
+    color: #8B4513;
+    text-align: center;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* Stairs instructions styling */
+.stairs-instructions {
+    color: #9E9E9E;
+    line-height: 1.3;
+}
+
+/* Boss display styling */
+.boss-display {
+    color: #DC143C;
+    text-align: center;
+    text-shadow: 0 0 15px rgba(220, 20, 60, 0.8);
+}
+
+/* Shop display styling */
+.shop-display {
+    color: #D4AF37;
+    text-align: center;
+    opacity: 0;
+}
+
+/* Witch display styling */
+.witch-display {
+    color: #8B008B;
+    text-align: center;
+    text-shadow: 0 0 10px rgba(139, 0, 139, 0.8);
+}
+
+/* Witch container styling */
+.witch-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+    max-width: 400px;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+/* Witch title styling */
+.witch-title {
+    color: #8B008B;
+    margin-bottom: 15px;
+    text-align: center;
+    line-height: 1.3;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* Curse name styling */
+.curse-name {
+    color: #D4AF37;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+/* Curse description styling */
+.curse-description {
+    color: #ffffff;
+    margin-bottom: 8px;
+    line-height: 1.3;
+    text-align: center;
+}
+
+/* Curse duration styling */
+.curse-duration {
+    color: #9E9E9E;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+/* Button container styling */
+.button-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+    width: 100%;
+}
+
+/* Shop container styling */
+.shop-container {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+    max-width: 400px;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+/* Shop emoji styling */
+.shop-emoji {
+    color: #D4AF37;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+/* Shop title styling */
+.shop-title {
+    color: #D4AF37;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+/* Centered miss text */
+.miss-text {
+    text-align: center;
 }
 
 @keyframes pulse {

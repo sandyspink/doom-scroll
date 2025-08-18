@@ -20,7 +20,7 @@ class NumberFeed {
         this.floorUpdateTimeout = null;
         this.armor = 10;
         this.armorElement = document.getElementById('armor');
-        this.danger = 0;
+        this.danger = 1;
         this.dangerElement = document.getElementById('danger');
         
         // Curse system
@@ -42,6 +42,7 @@ class NumberFeed {
     init() {
         this.generateNumbers();
         this.createFeedItems();
+        this.updateDangerDisplay(); // Initialize danger display
         this.setupEventListeners();
         this.setActiveItem(0);
     }
@@ -94,8 +95,35 @@ class NumberFeed {
         }
         
         // 50% chance for positive rewards (health/gold/maxHP)
-        const maxHealing = 1 + floor;
-        return Math.floor(Math.random() * maxHealing) + 1;
+        const maxHealing = floor;
+        return Math.floor(Math.random() * maxHealing) + floor;
+    }
+    
+    generateSlideContentWithEncounterLimit(floor, hasWitchAlready, allowEncounters) {
+        const rand = Math.random();
+        
+        // Only allow encounters if we haven't hit the limit
+        if (allowEncounters) {
+            // 5% chance for witch (floors 3+, no active curse, no witch already on this floor, and not banished)
+            if (floor >= 3 && this.curseCountdown === 0 && !hasWitchAlready && !this.witchBanished && rand < 0.05) {
+                return 'WITCH';
+            }
+            
+            // 25% chance for attacks (increased slightly since we have fewer encounters)
+            if (rand < 0.30) { // 0.05 + 0.25 = 0.30
+                const maxDamage = 1 + floor;
+                return -(Math.floor(Math.random() * maxDamage) + 1);
+            }
+        }
+        
+        // 15% chance for stairs (allowing descent)
+        if (rand < 0.45) { // 0.30 + 0.15 = 0.45
+            return 'STAIRS';
+        }
+        
+        // 55% chance for positive rewards (health/gold/maxHP) - increased to fill remaining probability
+        const maxHealing = floor;
+        return Math.floor(Math.random() * maxHealing) + floor;
     }
     
     generateNumberOnlyContent(floor) {
@@ -130,19 +158,17 @@ class NumberFeed {
             
             // First row is tutorial with fixed content
             let slideNumbers = [];
-            const currentFloor = index + 1; // Floor number for this row
+            const currentFloor = index; // Floor number for this row (0 = tutorial, 1+ = dungeon floors)
             
             if (index === 0) {
                 // Tutorial row with specific slides
                 slideNumbers = ['INTRO', 'TUTORIAL1', 'TUTORIAL2', 'TUTORIAL3', 'TUTORIAL4'];
             } else {
-                // Generate 4-9 random slides for each feed item
-                const slideCount = Math.floor(Math.random() * 6) + 4; // 4-9 slides
+                // Generate 8-12 random slides for each feed item
+                const slideCount = Math.floor(Math.random() * 5) + 8; // 8-12 slides
                 console.log(`Floor ${currentFloor}: Generating ${slideCount} slides`); // Debug
                 
-                // Make shop decision for this floor (20% chance)
-                const shopAvailable = Math.random() < 0.2;
-                console.log(`Floor ${currentFloor}: Shop available:`, shopAvailable);
+                // Shop logic moved to after boss/gold generation
                 
                 // Pre-determine all slide types
                 slideNumbers = [];
@@ -151,30 +177,40 @@ class NumberFeed {
                 // First slide is always the floor indicator
                 slideNumbers.push('FLOOR_INDICATOR');
                 
-                // Generate content for middle slides (excluding boss and final)
-                for (let i = 1; i < slideCount - 2; i++) {
-                    if (currentFloor === 3 && i === slideCount - 3 && this.curseCountdown === 0 && !this.witchBanished) {
-                        // Force witch as third-to-last slide on floor 3 for testing (unless banished)
+                // Generate content for middle slides (excluding boss, gold, and optional shop)
+                // Track encounters: max 2 encounters (attacks/witches) + 1 boss = 3 total
+                let encounterCount = 0;
+                const maxEncounters = 2;
+                // Reserve space for boss + gold + optional shop (2-3 slides)
+                const reservedSlides = 3; // Always reserve space for potential shop
+                
+                for (let i = 1; i < slideCount - reservedSlides; i++) {
+                    if (currentFloor === 3 && i === slideCount - reservedSlides - 1 && this.curseCountdown === 0 && !this.witchBanished && encounterCount < maxEncounters) {
+                        // Force witch before the boss/gold/shop section on floor 3 for testing (unless banished)
                         slideNumbers.push('WITCH');
                         hasWitch = true;
+                        encounterCount++;
                     } else {
-                        const content = this.generateSlideContentWithWitchLimit(currentFloor, hasWitch);
+                        const content = this.generateSlideContentWithEncounterLimit(currentFloor, hasWitch, encounterCount < maxEncounters);
                         console.log(`Floor ${currentFloor}, slide ${i}: Generated content`, content); // Debug
                         if (content === 'WITCH') {
                             hasWitch = true;
+                            encounterCount++;
+                        } else if (typeof content === 'number' && content < 0) {
+                            encounterCount++; // Attack encounter
                         }
                         slideNumbers.push(content);
                     }
                 }
                 
-                // Always add boss as second-to-last slide
+                // Always add boss, then gold loot, then optionally shop
                 slideNumbers.push('BOSS');
                 
-                // Add shop as last slide based on pre-determined availability
-                if (this.activeCurse?.effects.disableShops || !shopAvailable) {
-                    // Generate guaranteed gold reward instead of shop
-                    slideNumbers.push('GOLD');
-                } else {
+                // Always add gold loot after boss
+                slideNumbers.push('GOLD');
+                
+                // 50% chance for shop after gold (unless disabled by curse)
+                if (!this.activeCurse?.effects.disableShops && Math.random() < 0.5) {
                     slideNumbers.push('SHOP');
                 }
             }
@@ -204,17 +240,17 @@ class NumberFeed {
                 } else if (slideNumber === 'TUTORIAL2') {
                     this.createSlideLabel(slide, 'Tutorial');
                     numberDisplay.className = 'text-body';
-                    numberDisplay.innerHTML = 'Upgrade your 🛡️ Armor to prevent damage';
+                    numberDisplay.innerHTML = 'Upgrade your 🛡️ to prevent getting hit';
                     slide.dataset.scored = 'true';
                 } else if (slideNumber === 'TUTORIAL3') {
                     this.createSlideLabel(slide, 'Tutorial');
                     numberDisplay.className = 'text-body';
-                    numberDisplay.innerHTML = 'Avoid fights when you\'re low on health';
+                    numberDisplay.innerHTML = 'Avoid fights when you\'re low on blood 🩸';
                     slide.dataset.scored = 'true';
                 } else if (slideNumber === 'TUTORIAL4') {
                     this.createSlideLabel(slide, 'Tutorial');
                     numberDisplay.className = 'text-body';
-                    numberDisplay.innerHTML = 'Scroll down to start<br>Swipe left/right to enter a dungeon floor';
+                    numberDisplay.innerHTML = 'Scroll down to enter the dungeon';
                     slide.dataset.scored = 'true';
                 } else if (slideNumber === 'SHOP') {
                     this.createSlideLabel(slide, 'Shop');
@@ -270,9 +306,9 @@ class NumberFeed {
                         if (isGold) {
                             this.createSlideLabel(slide, 'You found gold!');
                         } else if (isMaxHP) {
-                            this.createSlideLabel(slide, 'Max HP increased!');
+                            this.createSlideLabel(slide, 'Max Blood Increased!');
                         } else {
-                            this.createSlideLabel(slide, 'You found a health potion!');
+                            this.createSlideLabel(slide, 'You found blood!');
                         }
                     } else if (slideNumber < 0) {
                         this.createSlideLabel(slide, 'An enemy attacks!');
@@ -289,12 +325,12 @@ class NumberFeed {
                             slide.dataset.isGold = 'true';
                             slide.dataset.isMaxHP = 'false';
                         } else if (isMaxHP) {
-                            emoji = '⬆️';
+                            emoji = '❤️';
                             text = '+1';
                             slide.dataset.isGold = 'false';
                             slide.dataset.isMaxHP = 'true';
                         } else {
-                            emoji = '🧪';
+                            emoji = '🩸';
                             text = `+${slideNumber}`;
                             slide.dataset.isGold = 'false';
                             slide.dataset.isMaxHP = 'false';
@@ -533,7 +569,7 @@ class NumberFeed {
         
         setTimeout(() => {
             this.scoreElement.style.transform = 'scale(1)';
-            this.scoreElement.style.color = '#fff';
+            this.scoreElement.style.color = '#BFB78F';
         }, 500);
         
         // Check for game over
@@ -556,7 +592,7 @@ class NumberFeed {
         
         setTimeout(() => {
             this.goldElement.style.transform = 'scale(1)';
-            this.goldElement.style.color = '#FFD700'; // Back to normal gold
+            this.goldElement.style.color = '#F2A71B'; // Back to normal gold
         }, 500);
     }
     
@@ -573,7 +609,7 @@ class NumberFeed {
         
         setTimeout(() => {
             this.scoreElement.style.transform = 'scale(1)';
-            this.scoreElement.style.color = '#fff';
+            this.scoreElement.style.color = '#BFB78F';
             this.scoreElement.style.textShadow = 'none';
         }, 500); // Longer animation for max HP
     }
@@ -586,12 +622,8 @@ class NumberFeed {
         
         // Create initial shop display (will be replaced when opened)
         const shopDisplay = document.createElement('div');
-        shopDisplay.className = 'text-number-large shop';
+        shopDisplay.className = 'text-number-large shop shop-display';
         shopDisplay.textContent = '🏪 SHOP';
-        shopDisplay.className = 'text-number-large shop';
-        shopDisplay.style.color = '#D4AF37';
-        shopDisplay.style.textAlign = 'center';
-        shopDisplay.style.opacity = '0'; // Hide initially to prevent flicker
         
         slide.appendChild(shopDisplay);
         console.log('Created shop slide with isShop:', slide.dataset.isShop, 'scored:', slide.dataset.scored); // Debug
@@ -603,12 +635,8 @@ class NumberFeed {
         
         // Create witch display
         const witchDisplay = document.createElement('div');
-        witchDisplay.className = 'text-number-large';
+        witchDisplay.className = 'text-number-large witch-display';
         witchDisplay.textContent = '🧙‍♀️ WITCH';
-        witchDisplay.className = 'text-number-large';
-        witchDisplay.style.color = '#8B008B';
-        witchDisplay.style.textAlign = 'center';
-        witchDisplay.style.textShadow = '0 0 10px rgba(139, 0, 139, 0.8)';
         
         slide.appendChild(witchDisplay);
     }
@@ -618,11 +646,8 @@ class NumberFeed {
         
         // Create floor indicator display
         const floorDisplay = document.createElement('div');
-        floorDisplay.className = 'text-h1';
+        floorDisplay.className = 'text-h1 floor-display';
         floorDisplay.textContent = `Floor ${floor}`;
-        floorDisplay.style.color = '#D4AF37';
-        floorDisplay.style.textAlign = 'center';
-        floorDisplay.style.textShadow = '2px 2px 4px rgba(0, 0, 0, 0.8)';
         
         slide.appendChild(floorDisplay);
     }
@@ -632,17 +657,14 @@ class NumberFeed {
         
         // Create stairs display with vertical layout and instructions
         const stairsDisplay = document.createElement('div');
-        stairsDisplay.className = 'text-number-large';
+        stairsDisplay.className = 'text-number-large stairs-display';
         stairsDisplay.innerHTML = `
             <div>🪜</div>
             <div></div>
-            <div class="text-body" style="color: #9E9E9E; line-height: 1.3;">
-                Swipe down to descend<br>or swipe right to keep going
+            <div class="text-body stairs-instructions">
+                Swipe down to descend<br>or swipe right to keep going<br>↓
             </div>
         `;
-        stairsDisplay.style.color = '#8B4513';
-        stairsDisplay.style.textAlign = 'center';
-        stairsDisplay.style.textShadow = '2px 2px 4px rgba(0, 0, 0, 0.8)';
         
         slide.appendChild(stairsDisplay);
     }
@@ -656,11 +678,8 @@ class NumberFeed {
         
         // Create boss display with vertical layout
         const bossDisplay = document.createElement('div');
-        bossDisplay.className = 'text-number-large';
+        bossDisplay.className = 'text-number-large boss-display';
         bossDisplay.innerHTML = `<div>🐉</div><div>${bossDamage}</div>`;
-        bossDisplay.style.color = '#DC143C';
-        bossDisplay.style.textAlign = 'center';
-        bossDisplay.style.textShadow = '0 0 15px rgba(220, 20, 60, 0.8)';
         bossDisplay.dataset.originalNumber = bossDamage;
         
         slide.appendChild(bossDisplay);
@@ -690,67 +709,39 @@ class NumberFeed {
         // Create witch container
         const witchContainer = document.createElement('div');
         witchContainer.className = 'witch-container';
-        witchContainer.style.display = 'flex';
-        witchContainer.style.flexDirection = 'column';
-        witchContainer.style.alignItems = 'center';
-        witchContainer.style.justifyContent = 'center';
-        witchContainer.style.height = '100%';
-        witchContainer.style.width = '100%';
-        witchContainer.style.maxWidth = '400px';
-        witchContainer.style.padding = '20px';
-        witchContainer.style.boxSizing = 'border-box';
         
         // Witch emoji and title
         const title = document.createElement('div');
         title.innerHTML = '🧙‍♀️<br>Witch';
-        title.className = 'text-number-large';
-        title.style.color = '#8B008B';
-        title.style.marginBottom = '15px';
-        title.style.textAlign = 'center';
-        title.style.lineHeight = '1.3';
-        title.style.textShadow = '0 0 10px rgba(139, 0, 139, 0.8)';
+        title.className = 'text-number-large witch-title';
         witchContainer.appendChild(title);
         
         // Curse name
         const curseName = document.createElement('div');
         curseName.textContent = curse.name;
-        curseName.className = 'text-h3';
-        curseName.style.color = '#D4AF37';
-        curseName.style.marginBottom = '10px';
-        curseName.style.textAlign = 'center';
+        curseName.className = 'text-h3 curse-name';
         witchContainer.appendChild(curseName);
         
         // Brief description
         const briefDesc = document.createElement('div');
         briefDesc.textContent = curse.description;
-        briefDesc.className = 'text-body';
-        briefDesc.style.color = '#ffffff';
-        briefDesc.style.marginBottom = '8px';
-        briefDesc.style.lineHeight = '1.3';
-        briefDesc.style.textAlign = 'center';
+        briefDesc.className = 'text-body curse-description';
         witchContainer.appendChild(briefDesc);
         
         // Duration
         const duration = document.createElement('div');
         duration.textContent = `${curse.duration} floors`;
-        duration.className = 'text-body';
-        duration.style.color = '#9E9E9E';
-        duration.style.marginBottom = '15px';
-        duration.style.textAlign = 'center';
+        duration.className = 'text-body curse-duration';
         witchContainer.appendChild(duration);
         
         // Buttons container
         const buttonsContainer = document.createElement('div');
-        buttonsContainer.style.display = 'flex';
-        buttonsContainer.style.flexDirection = 'column';
-        buttonsContainer.style.gap = '12px';
-        buttonsContainer.style.alignItems = 'stretch';
-        buttonsContainer.style.width = '100%';
+        buttonsContainer.className = 'button-container';
         
         // Accept button
         const acceptBtn = document.createElement('button');
         const acceptCost = Math.ceil(this.score / 4);
-        acceptBtn.textContent = `Accept Curse (-${acceptCost} HP)`;
+        acceptBtn.textContent = `Accept Curse (-${acceptCost} blood)`;
         acceptBtn.style.backgroundColor = '#8B008B';
         acceptBtn.style.color = '#ffffff';
         acceptBtn.className = 'text-body button';
@@ -773,7 +764,7 @@ class NumberFeed {
         // Banish button
         const banishBtn = document.createElement('button');
         const banishCost = Math.ceil(this.score / 2);
-        banishBtn.textContent = `Banish Witch (-${banishCost} HP)`;
+        banishBtn.textContent = `Banish Witch (-${banishCost} blood)`;
         banishBtn.style.backgroundColor = '#4CAF50';
         banishBtn.style.color = '#ffffff';
         banishBtn.className = 'text-body button';
@@ -969,15 +960,23 @@ class NumberFeed {
     }
     
     acceptCurse(curse) {
-        this.activeCurse = curse;
-        this.curseCountdown = curse.duration;
-        this.updateCurseDisplay();
-        
-        // Apply immediate effects (like halving armor)
-        if (curse.effects.armorDivider) {
-            this.armor = Math.floor(this.armor / curse.effects.armorDivider);
-            this.armorElement.textContent = this.armor;
+        // If already cursed, extend duration but don't stack effects
+        if (this.activeCurse && this.curseCountdown > 0) {
+            this.curseCountdown += curse.duration;
+            console.log(`Curse duration extended by ${curse.duration} floors. New total: ${this.curseCountdown}`);
+        } else {
+            // First curse - apply full effects
+            this.activeCurse = curse;
+            this.curseCountdown = curse.duration;
+            
+            // Apply immediate effects (like halving armor)
+            if (curse.effects.armorDivider) {
+                this.armor = Math.floor(this.armor / curse.effects.armorDivider);
+                this.armorElement.textContent = this.armor;
+            }
         }
+        
+        this.updateCurseDisplay();
     }
     
     updateCurseDisplay() {
@@ -988,6 +987,12 @@ class NumberFeed {
             this.curseDisplayElement.style.display = 'none';
             this.activeCurse = null;
         }
+    }
+    
+    updateDangerDisplay() {
+        // Calculate current danger based on floor (starts at 1, +1 every 3 floors)
+        const currentDanger = 1 + Math.floor(this.currentFloor / 3);
+        this.dangerElement.textContent = currentDanger;
     }
     
     applyCurseEffects(baseValue, effectType) {
@@ -1080,7 +1085,7 @@ class NumberFeed {
     openShop(slide) {
         console.log('openShop called! Floor:', slide.dataset.shopFloor, 'Gold:', this.gold); // Debug
         const floor = parseInt(slide.dataset.shopFloor);
-        const itemCost = floor * 2;
+        const itemCost = floor * 3;
         
         // Hide the shop display immediately to prevent flicker
         const shopDisplay = slide.querySelector('.text-number-large');
@@ -1149,15 +1154,16 @@ class NumberFeed {
         title.style.textAlign = 'center';
         shopContainer.appendChild(title);
         
-        // Shop items
+        // Shop items with individual costs
+        const fullHealCost = Math.floor(itemCost / 2); // Half price for full heal
         const items = [
-            { emoji: '🧪', name: 'Full Heal', action: () => this.purchaseFullHeal(itemCost, null) },
-            { emoji: '🛡️', name: 'Armor +1', action: () => this.purchaseACUpgrade(itemCost, null) },
-            { emoji: '❤️', name: 'Max HP +1', action: () => this.purchaseMaxHPUpgrade(itemCost, null) }
+            { emoji: '🩸', name: 'Full Heal', cost: fullHealCost, action: () => this.purchaseFullHeal(fullHealCost, null) },
+            { emoji: '🛡️', name: 'Armor +1', cost: itemCost, action: () => this.purchaseACUpgrade(itemCost, null) },
+            { emoji: '❤️', name: 'Max Blood +1', cost: itemCost, action: () => this.purchaseMaxHPUpgrade(itemCost, null) }
         ];
         
         items.forEach(item => {
-            const canAfford = this.gold >= itemCost; // Check CURRENT gold
+            const canAfford = this.gold >= item.cost; // Check CURRENT gold against item's cost
             
             const itemButton = document.createElement('button');
             itemButton.style.margin = '6px 0'; // Adjust margin proportionally
@@ -1166,7 +1172,7 @@ class NumberFeed {
             itemButton.style.cursor = canAfford ? 'pointer' : 'not-allowed';
             itemButton.className = 'text-body button';
             itemButton.style.opacity = canAfford ? '1' : '0.5';
-            itemButton.disabled = !canAfford;
+            // Don't disable so we can still update them after purchases
             
             // Button content
             const buttonContent = document.createElement('div');
@@ -1179,21 +1185,21 @@ class NumberFeed {
             leftSpan.textContent = `${item.emoji} ${item.name}`;
             
             const rightSpan = document.createElement('span');
-            rightSpan.textContent = `${itemCost}g`;
+            rightSpan.textContent = `${item.cost}g`;
             rightSpan.style.color = '#FFD700';
             
             buttonContent.appendChild(leftSpan);
             buttonContent.appendChild(rightSpan);
             itemButton.appendChild(buttonContent);
             
-            if (canAfford) {
-                itemButton.onclick = () => {
+            // Always attach click handler, but only execute if affordable
+            itemButton.onclick = () => {
+                if (this.gold >= item.cost) {
                     item.action();
-                    // Update gold display and button states after purchase using CURRENT gold
-                    goldDisplay.textContent = `Gold: ${this.gold}`;
-                    this.updateShopButtonStates(shopContainer, itemCost);
-                };
-            }
+                    // Update button states after purchase
+                    this.updateShopButtonStates(shopContainer, items);
+                }
+            };
             
             shopContainer.appendChild(itemButton);
         });
@@ -1202,14 +1208,15 @@ class NumberFeed {
         }, 100); // Small delay to show shop text briefly before UI
     }
     
-    updateShopButtonStates(shopContainer, itemCost) {
+    updateShopButtonStates(shopContainer, items) {
         const buttons = shopContainer.querySelectorAll('button');
-        buttons.forEach(button => {
-            const canAfford = this.gold >= itemCost; // Use CURRENT gold
+        buttons.forEach((button, index) => {
+            const item = items[index];
+            const canAfford = this.gold >= item.cost; // Use CURRENT gold against item's individual cost
             button.style.backgroundColor = canAfford ? '#4CAF50' : '#666';
             button.style.cursor = canAfford ? 'pointer' : 'not-allowed';
             button.style.opacity = canAfford ? '1' : '0.5';
-            button.disabled = !canAfford;
+            // Don't disable so buttons can still be clicked for updates
         });
     }
     
@@ -1456,6 +1463,10 @@ class NumberFeed {
         this.armor = 10;
         this.armorElement.textContent = this.armor;
         
+        // Reset danger
+        this.danger = 1;
+        this.updateDangerDisplay();
+        
         // Reset gold
         this.gold = 0;
         this.goldElement.textContent = this.gold;
@@ -1492,9 +1503,10 @@ class NumberFeed {
         const originalText = numberDisplay.textContent;
         const sword = '🗡️';
         
-        // Roll d20 for attack with floor bonus (+1 every 5 floors) and danger bonus
-        const floorBonus = Math.floor(this.currentFloor / 5);
-        const attackRoll = Math.floor(Math.random() * 20) + 1 + floorBonus + this.danger;
+        // Calculate danger based on floor (starts at 1, +1 every 3 floors)
+        const currentDanger = 1 + Math.floor(this.currentFloor / 3);
+        // Roll d20 for regular enemy attack: d20 + danger
+        const attackRoll = Math.floor(Math.random() * 20) + 1 + currentDanger;
         const isHit = attackRoll > this.armor;
         
         // Start rolling animation - keep sword, replace number with dice
@@ -1520,16 +1532,15 @@ class NumberFeed {
                 clearInterval(rollTimer);
                 
                 if (isHit) {
-                    // Hit - show original damage (vertical layout)
-                    numberDisplay.innerHTML = `<div>${sword}</div><div>${finalDamage}</div>`;
+                    // Hit - apply curse effects and show actual damage (vertical layout)
+                    const actualDamage = this.applyCurseEffects(finalDamage, 'damage');
+                    numberDisplay.innerHTML = `<div>${sword}</div><div style="text-align: center;">${actualDamage} 🩸</div>`;
                     this.addToScore(finalDamage);
                 } else {
                     // Miss - show Miss instead (vertical layout)
-                    numberDisplay.innerHTML = `<div style="text-align: center;">${sword}</div><div style="text-align: center;">Miss!</div>`;
+                    numberDisplay.innerHTML = `<div class="miss-text">${sword}</div><div class="miss-text">Miss!</div>`;
                     numberDisplay.classList.add('miss');
-                    // Enemy gets stronger when they miss!
-                    this.danger++;
-                    this.dangerElement.textContent = this.danger;
+                    // No danger increase - danger is now calculated from floor
                     // No damage applied
                 }
                 
@@ -1549,10 +1560,10 @@ class NumberFeed {
         const originalText = numberDisplay.textContent;
         const dragon = '🐉';
         
-        // Roll d20 for boss attack with floor bonus (+1 every 5 floors) PLUS +2 boss bonus and danger bonus
-        const floorBonus = Math.floor(this.currentFloor / 5);
-        const bossBonus = 2; // Bosses get +2 to hit
-        const attackRoll = Math.floor(Math.random() * 20) + 1 + floorBonus + bossBonus + this.danger;
+        // Calculate danger based on floor (starts at 1, +1 every 3 floors)
+        const currentDanger = 1 + Math.floor(this.currentFloor / 3);
+        // Roll d20 for boss attack: d20 + (danger × 2)
+        const attackRoll = Math.floor(Math.random() * 20) + 1 + (currentDanger * 2);
         const isHit = attackRoll > this.armor;
         
         // Start rolling animation - keep dragon, replace number with dice
@@ -1583,16 +1594,15 @@ class NumberFeed {
                 clearInterval(rollTimer);
                 
                 if (isHit) {
-                    // Hit - show original damage (vertical layout)
-                    numberDisplay.innerHTML = `<div>${dragon}</div><div>${finalDamage}</div>`;
+                    // Hit - apply curse effects and show actual damage (vertical layout)
+                    const actualDamage = this.applyCurseEffects(finalDamage, 'damage');
+                    numberDisplay.innerHTML = `<div>${dragon}</div><div style="text-align: center;">${actualDamage} 🩸</div>`;
                     this.addToScore(finalDamage);
                 } else {
                     // Miss - show Miss instead (vertical layout)
-                    numberDisplay.innerHTML = `<div style="text-align: center;">${dragon}</div><div style="text-align: center;">Miss!</div>`;
+                    numberDisplay.innerHTML = `<div class="miss-text">${dragon}</div><div class="miss-text">Miss!</div>`;
                     numberDisplay.classList.add('miss');
-                    // Enemy gets stronger when they miss!
-                    this.danger++;
-                    this.dangerElement.textContent = this.danger;
+                    // No danger increase - danger is now calculated from floor
                     // No damage applied
                 }
                 
@@ -1721,6 +1731,20 @@ class NumberFeed {
         // Debounce scroll events
         if (this.isScrolling) return;
         
+        const container = document.querySelector('.feed-container');
+        const containerHeight = container.clientHeight;
+        const scrollTop = container.scrollTop;
+        
+        // Calculate which item would be active based on scroll position
+        const newIndex = Math.round(scrollTop / containerHeight);
+        
+        // If trying to scroll to a new item and can't descend, prevent it
+        if (newIndex > this.currentIndex && !this.canDescend()) {
+            // Snap back to current position
+            container.scrollTop = this.currentIndex * containerHeight;
+            return;
+        }
+        
         this.isScrolling = true;
         setTimeout(() => {
             this.updateActiveItem();
@@ -1742,6 +1766,9 @@ class NumberFeed {
     }
     
     canDescend() {
+        // Always allow descending on tutorial frames (index 0) so users can skip tutorial
+        if (this.currentIndex === 0) return true;
+        
         // Get the current feed item
         const currentItem = document.querySelector(`[data-index="${this.currentIndex}"]`);
         if (!currentItem) return false;
@@ -1759,11 +1786,24 @@ class NumberFeed {
         
         if (!currentSlide) return false;
         
-        // Allow descent if it's the last slide (shop) or a stairs slide
-        const isLastSlide = activeSlideIndex === slides.length - 1;
+        // Only allow descent on:
+        // 1. Stairs slides (have canDescend="true")
+        // 2. Slides that come after the boss (gold/shop slides at the end)
         const isStairsSlide = currentSlide.dataset.canDescend === 'true';
         
-        return isLastSlide || isStairsSlide;
+        // Check if this is a slide that comes after the boss
+        // Look for boss slide and check if current slide is after it
+        let bossSlideIndex = -1;
+        for (let i = 0; i < slides.length; i++) {
+            if (slides[i].dataset.isBoss === 'true') {
+                bossSlideIndex = i;
+                break;
+            }
+        }
+        
+        const isAfterBoss = bossSlideIndex >= 0 && activeSlideIndex > bossSlideIndex;
+        
+        return isStairsSlide || isAfterBoss;
     }
     
     nextItem() {
@@ -1811,8 +1851,9 @@ class NumberFeed {
             
             this.floorUpdateTimeout = setTimeout(() => {
                 const oldFloor = this.currentFloor;
-                this.currentFloor = index + 1;
+                this.currentFloor = index;
                 this.floorElement.textContent = this.currentFloor;
+                this.updateDangerDisplay();
                 
                 
                 // Decrement curse countdown when moving to a new floor
