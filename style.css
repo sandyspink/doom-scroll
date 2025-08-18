@@ -115,8 +115,12 @@ body {
 .header h1 {
     text-align: center;
     color: var(--color-gold);
+    font-family: 'Cinzel', serif;
+    font-weight: 400;
+    font-size: 32px;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
     margin-bottom: 5px;
+    letter-spacing: 1px;
 }
 
 .floor-display-header {
@@ -303,6 +307,10 @@ body {
     text-align: center;
 }
 
+.score-display #score {
+    color: #BFB78F;
+}
+
 .armor-display {
     color: var(--color-gray);
     text-align: center;
@@ -311,6 +319,10 @@ body {
 .gold-display {
     color: var(--color-gold);
     text-align: center;
+}
+
+.gold-display #gold {
+    color: #F2A71B;
 }
 
 @keyframes pulse {

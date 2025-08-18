@@ -132,8 +132,10 @@ class NumberFeed {
             let slideNumbers = [];
             const currentFloor = index + 1; // Floor number for this row
             
-            // Skip tutorial for now - start directly with regular floors
-            {
+            if (index === 0) {
+                // Tutorial row with specific slides
+                slideNumbers = ['INTRO', 'TUTORIAL1', 'TUTORIAL2', 'TUTORIAL3', 'TUTORIAL4'];
+            } else {
                 // Generate 4-9 random slides for each feed item
                 const slideCount = Math.floor(Math.random() * 6) + 4; // 4-9 slides
                 console.log(`Floor ${currentFloor}: Generating ${slideCount} slides`); // Debug
@@ -369,12 +371,15 @@ class NumberFeed {
                 this.setupHorizontalScrollListener(horizontalContainer, dotsContainer);
             }
             
-            // Add swipe indicator to first item
+            // Add swipe indicator only to the first slide of tutorial
             if (index === 0) {
-                const indicator = document.createElement('div');
-                indicator.className = 'swipe-indicator';
-                indicator.textContent = 'Swipe right';
-                item.appendChild(indicator);
+                const firstSlide = horizontalContainer.querySelector('.slide');
+                if (firstSlide) {
+                    const indicator = document.createElement('div');
+                    indicator.className = 'swipe-indicator';
+                    indicator.textContent = 'Swipe right';
+                    firstSlide.appendChild(indicator);
+                }
             }
             
             this.feed.appendChild(item);
